@@ -14,9 +14,15 @@ export default async function handler(
   }
 
   try {
-    const { version, license_key } = req.query as UpdateCheckRequest;
+    const { version, license_key } = req.query;
 
-    if (!license_key) {
+    if (!license_key || typeof license_key !== 'string') {
+      return res.status(400).json({
+        update_available: false,
+      });
+    }
+
+    if (!version || typeof version !== 'string') {
       return res.status(400).json({
         update_available: false,
       });
@@ -37,7 +43,7 @@ export default async function handler(
     const changelog = 'Bug fixes and performance improvements';
 
     // Compare versions (simple string comparison for now)
-    const currentVersion = version || '1.0.0';
+    const currentVersion = version;
     const updateAvailable = currentVersion !== latestVersion;
 
     if (!updateAvailable) {
