@@ -3,15 +3,5 @@
     "api/**/*.ts": {
       "runtime": "nodejs18.x"
     }
-  },
-  "env": {
-    "LEMON_SQUEEZY_API_KEY": "@lemon-squeezy-api-key",
-    "LEMON_SQUEEZY_SIGNING_SECRET": "@lemon-squeezy-signing-secret",
-    "SUPABASE_URL": "@supabase-url",
-    "SUPABASE_KEY": "@supabase-key",
-    "S3_BUCKET_NAME": "@s3-bucket-name",
-    "S3_REGION": "@s3-region",
-    "S3_ACCESS_KEY": "@s3-access-key",
-    "S3_SECRET_KEY": "@s3-secret-key"
   }
 }
