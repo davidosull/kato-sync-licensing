@@ -1,10 +1,6 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
+const { createClient } = require('@supabase/supabase-js');
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
+export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -22,8 +18,7 @@ export default async function handler(
       return res.status(500).json({
         success: false,
         error: 'Missing Supabase configuration',
-        details:
-          'SUPABASE_URL and SUPABASE_KEY environment variables are required',
+        details: 'SUPABASE_URL and SUPABASE_KEY environment variables are required',
         timestamp: new Date().toISOString(),
       });
     }
