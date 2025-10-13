@@ -58,15 +58,34 @@ export function isLicenseExpired(expiresAt: string): boolean {
 export function getGracePeriodDays(expiresAt: string): number {
   const expiryDate = new Date(expiresAt);
   const now = new Date();
+  
+  // If license hasn't expired yet, return 0 (not in grace period)
+  if (now < expiryDate) {
+    return 0;
+  }
+  
+  // Calculate days since expiry
   const diffTime = now.getTime() - expiryDate.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  // Return days remaining in grace period (7 days total)
-  return Math.max(0, 7 - diffDays);
+  const daysSinceExpiry = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  // Return remaining grace period days (7 days total grace period)
+  return Math.max(0, 7 - daysSinceExpiry);
 }
 
 export function isInGracePeriod(expiresAt: string): boolean {
-  return getGracePeriodDays(expiresAt) > 0;
+  const expiryDate = new Date(expiresAt);
+  const now = new Date();
+  
+  // License must be expired to be in grace period
+  if (now < expiryDate) {
+    return false;
+  }
+  
+  // Check if within 7 days of expiry
+  const diffTime = now.getTime() - expiryDate.getTime();
+  const daysSinceExpiry = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  
+  return daysSinceExpiry <= 7;
 }
 
 export function getLicenseStatus(
