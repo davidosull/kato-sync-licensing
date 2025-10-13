@@ -1,6 +1,11 @@
-const { createClient } = require('@supabase/supabase-js');
+import { NextApiRequest, NextApiResponse } from 'next';
+import { createClient } from '@supabase/supabase-js';
 
-export default async function handler(req, res) {
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -8,7 +13,7 @@ export default async function handler(req, res) {
   try {
     // Check if environment variables are set
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_KEY;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.error('Missing Supabase environment variables:', {
@@ -18,26 +23,29 @@ export default async function handler(req, res) {
       return res.status(500).json({
         success: false,
         error: 'Missing Supabase configuration',
-        details: 'SUPABASE_URL and SUPABASE_KEY environment variables are required',
+        details:
+          'SUPABASE_URL and SUPABASE_ANON_KEY environment variables are required',
         timestamp: new Date().toISOString(),
       });
     }
 
-    // Create Supabase client directly
+    // Create a fresh Supabase client for this request
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Perform a simple query to keep the database active
+    // Try the simplest possible query - just test the connection
+    // This should work even if tables don't exist yet
     const { data, error } = await supabase
-      .from('licenses')
-      .select('id')
+      .from('pg_tables')
+      .select('tablename')
       .limit(1);
 
     if (error) {
       console.error('Keep-alive query failed:', error);
       return res.status(500).json({
         success: false,
-        error: 'Database query failed',
+        error: 'Database connection failed',
         details: error.message,
+        code: error.code,
         timestamp: new Date().toISOString(),
       });
     }

@@ -90,5 +90,6 @@ export function generateSignedUrl(
 ): string {
   // This is a placeholder - in production, you'd use AWS SDK to generate signed URLs
   // For now, return a direct URL (you'll need to implement proper S3 signed URL generation)
-  return `https://${bucketName}.s3.amazonaws.com/${key}`;
+  const region = process.env.AWS_REGION || 'eu-north-1';
+  return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
 }

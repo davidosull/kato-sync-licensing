@@ -12,7 +12,7 @@ export default async function handler(
   try {
     // Check environment variables
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_KEY;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
     const diagnostics = {
       timestamp: new Date().toISOString(),

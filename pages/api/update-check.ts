@@ -39,8 +39,8 @@ export default async function handler(
 
     // For now, we'll hardcode the latest version and changelog
     // In production, you'd fetch this from S3 or a database
-    const latestVersion = '1.2.0';
-    const changelog = 'Bug fixes and performance improvements';
+    const latestVersion = '0.9.0';
+    const changelog = 'Pre-production release - Core functionality ready';
 
     // Compare versions (simple string comparison for now)
     const currentVersion = version;
@@ -53,7 +53,7 @@ export default async function handler(
     }
 
     // Generate signed download URL
-    const bucketName = process.env.S3_BUCKET_NAME!;
+    const bucketName = process.env.AWS_S3_BUCKET!;
     const downloadUrl = generateSignedUrl(bucketName, 'kato-sync-latest.zip');
 
     return res.status(200).json({
