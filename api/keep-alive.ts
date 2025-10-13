@@ -1,11 +1,10 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { getLicense } from '@/lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -29,13 +28,25 @@ export default async function handler(
       });
     }
 
-    // Use the same pattern as other working endpoints
-    // Try to get a license (this will test the database connection)
-    // We'll use a dummy key that likely doesn't exist, but the query will still work
-    const license = await getLicense('keep-alive-test-key');
+    // Create Supabase client directly
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // The getLicense function returns null if no license is found,
-    // but it will still have tested the database connection
+    // Perform a simple query to keep the database active
+    const { data, error } = await supabase
+      .from('licenses')
+      .select('id')
+      .limit(1);
+
+    if (error) {
+      console.error('Keep-alive query failed:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Database query failed',
+        details: error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     console.log('Database keep-alive successful');
 
     return res.status(200).json({
