@@ -1,4 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { Readable } from 'stream';
 import { LemonSqueezyWebhook } from '@/types';
 import { verifyWebhookSignature } from '@/lib/utils';
 import {
@@ -22,7 +23,10 @@ export default async function handler(
   }
 
   try {
-    const signature = req.headers['x-signature'] as string;
+    // Early receipt log (before any verification)
+    console.log('[LS Webhook] Received webhook request');
+
+    const signature = (req.headers['x-signature'] || req.headers['X-Signature']) as string;
     const signingSecret = process.env.LEMON_SQUEEZY_SIGNING_SECRET!;
 
     if (!signature) {
@@ -30,8 +34,9 @@ export default async function handler(
       return res.status(400).json({ error: 'Missing signature' });
     }
 
-    // Verify webhook signature
-    const payload = JSON.stringify(req.body);
+    // Verify webhook signature using RAW body (bodyParser disabled in route config)
+    const rawPayload = await getRawBody(req);
+    const payload = rawPayload.toString('utf8');
     const isValid = verifyWebhookSignature(payload, signature, signingSecret);
     console.log('[LS Webhook] Signature validation result', { isValid });
 
@@ -39,7 +44,8 @@ export default async function handler(
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
-    const webhook: LemonSqueezyWebhook = req.body;
+    // Parse JSON from raw body only after signature check
+    const webhook: LemonSqueezyWebhook = JSON.parse(payload);
     const eventName = webhook.meta.event_name;
 
     console.log(`Processing Lemon Squeezy webhook: ${eventName}`, {
@@ -103,7 +109,8 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
     console.log('[LS Webhook] Loaded order details', {
       order_id: order.id,
       email: orderDetails?.attributes?.user_email,
-      order_items_count: orderDetails?.relationships?.['order-items']?.data?.length,
+      order_items_count:
+        orderDetails?.relationships?.['order-items']?.data?.length,
     });
 
     // Extract license key from order
@@ -151,7 +158,9 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       orderItem.attributes.product_options?.license_key ||
       orderItem.attributes.custom_data?.license_key ||
       orderItem.attributes.identifier; // Fallback to order identifier
-    console.log('[LS Webhook] Derived license key', { licenseKey_present: !!licenseKey });
+    console.log('[LS Webhook] Derived license key', {
+      licenseKey_present: !!licenseKey,
+    });
 
     // Derive tier and billing cycle from names to support test/live without hardcoded IDs
     const variantId = String(orderItem.attributes.variant_id);
@@ -189,7 +198,10 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       expires_at: expiresAt.toISOString(),
     });
 
-    console.log('[LS Webhook] License insert result', { success: !!created, license_key: licenseKey });
+    console.log('[LS Webhook] License insert result', {
+      success: !!created,
+      license_key: licenseKey,
+    });
   } catch (error) {
     console.error('Error handling order_created:', error);
   }
@@ -295,3 +307,19 @@ async function handlePaymentFailed(webhook: LemonSqueezyWebhook) {
     console.error('Error handling payment_failed:', error);
   }
 }
+
+// Helper to read raw request body
+async function getRawBody(req: NextApiRequest): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+// Disable Next.js body parsing to preserve raw body for signature verification
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
