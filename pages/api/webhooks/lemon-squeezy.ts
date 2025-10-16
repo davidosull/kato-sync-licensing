@@ -6,7 +6,11 @@ import {
   updateLicense,
   createSubscriptionEvent,
 } from '@/lib/supabase';
-import { calculateExpiryDate, getOrder, getSubscription } from '@/lib/lemon-squeezy';
+import {
+  calculateExpiryDate,
+  getOrder,
+  getSubscription,
+} from '@/lib/lemon-squeezy';
 
 export default async function handler(
   req: NextApiRequest,
@@ -24,18 +28,23 @@ export default async function handler(
       return res.status(400).json({ error: 'Missing signature' });
     }
 
-    // Verify webhook signature
+    // Verify webhook signature (note: uses parsed JSON; if this fails we may need raw body)
     const payload = JSON.stringify(req.body);
     const isValid = verifyWebhookSignature(payload, signature, signingSecret);
 
     if (!isValid) {
+      console.error('[LS Webhook] Invalid signature. Hint: Next.js may alter body; raw body config may be required.');
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
     const webhook: LemonSqueezyWebhook = req.body;
     const eventName = webhook.meta.event_name;
 
-    console.log(`Processing Lemon Squeezy webhook: ${eventName}`);
+    console.log(`[LS Webhook] Event received: ${eventName}`, {
+      test_mode: (webhook as any)?.meta?.test_mode ?? undefined,
+      data_type: webhook.data?.type,
+      data_id: webhook.data?.id,
+    });
 
     // Handle different event types
     switch (eventName) {
@@ -87,12 +96,20 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
 
   try {
     // Get order details from Lemon Squeezy API
+    console.log('[LS Webhook] handleOrderCreated: fetching order details', { order_id: order.id });
     const orderDetails = await getOrder(order.id);
+    console.log('[LS Webhook] order details loaded', {
+      email: orderDetails?.attributes?.user_email,
+      order_items_count: orderDetails?.relationships?.['order-items']?.data?.length,
+    });
 
     // Extract license key from order
     // Lemon Squeezy includes license keys in the order items when license key generation is enabled
     const orderItems = orderDetails.relationships['order-items'].data;
-    if (orderItems.length === 0) return;
+    if (orderItems.length === 0) {
+      console.warn('[LS Webhook] No order items found');
+      return;
+    }
 
     // Get the first order item (assuming single item orders)
     const orderItemId = orderItems[0].id;
@@ -110,12 +127,17 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
     );
 
     if (!orderItemResponse.ok) {
-      console.error(`Failed to fetch order item ${orderItemId}`);
+      console.error(`[LS Webhook] Failed to fetch order item ${orderItemId}`, { status: orderItemResponse.status, statusText: orderItemResponse.statusText });
       return;
     }
 
     const orderItemData = await orderItemResponse.json();
     const orderItem = orderItemData.data;
+    console.log('[LS Webhook] order item loaded', {
+      variant_id: orderItem?.attributes?.variant_id,
+      variant_name: orderItem?.attributes?.variant_name,
+      product_name: orderItem?.attributes?.product_name,
+    });
 
     // Extract license key from order item
     // License keys are typically in the product_options or custom_data
@@ -123,6 +145,9 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       orderItem.attributes.product_options?.license_key ||
       orderItem.attributes.custom_data?.license_key ||
       orderItem.attributes.identifier; // Fallback to order identifier
+    if (!licenseKey) {
+      console.warn('[LS Webhook] No license key present on order item attributes');
+    }
 
     // Derive tier and billing cycle from names to support test/live without hardcoded IDs
     const variantId = String(orderItem.attributes.variant_id);
@@ -133,7 +158,11 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
     const lowerName = `${productName} ${variantName}`.toLowerCase();
     let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
     if (lowerName.includes('agency')) tier = 'agency';
-    else if (lowerName.includes('enterprise') || lowerName.includes('unlimited')) tier = 'unlimited';
+    else if (
+      lowerName.includes('enterprise') ||
+      lowerName.includes('unlimited')
+    )
+      tier = 'unlimited';
 
     // Determine billing cycle from variant naming
     const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')
@@ -144,7 +173,7 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
     const expiresAt = calculateExpiryDate(billingCycle);
 
     // Create license
-    await createLicense({
+    const created = await createLicense({
       license_key: licenseKey,
       order_id: order.id,
       variant_id: variantId,
@@ -156,7 +185,11 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       expires_at: expiresAt.toISOString(),
     });
 
-    console.log(`Created license for order ${order.id}: ${licenseKey}`);
+    if (created) {
+      console.log('[LS Webhook] License created', { order_id: order.id, license_key: licenseKey });
+    } else {
+      console.error('[LS Webhook] License creation returned null');
+    }
   } catch (error) {
     console.error('Error handling order_created:', error);
   }
