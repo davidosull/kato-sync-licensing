@@ -72,13 +72,31 @@ export default async function handler(
       );
 
       if (tierLimit !== -1 && nonLocalActivations.length >= tierLimit) {
+        // Determine upgrade tier
+        const tierHierarchy: Record<string, { next: string; limit: number }> = {
+          freelancer: { next: 'Agency', limit: 5 },
+          agency: { next: 'Enterprise', limit: -1 },
+        };
+
+        const upgradeInfo = tierHierarchy[license.tier];
+        const upgradeMessage = upgradeInfo
+          ? ` Upgrade to ${upgradeInfo.next} for ${
+              upgradeInfo.limit === -1 ? 'unlimited' : upgradeInfo.limit
+            } sites.`
+          : '';
+
         return res.status(400).json({
           success: false,
-          message: `License tier limit reached. ${
-            license.tier
-          } tier allows ${tierLimit} site${
+          message: `License tier limit reached. You're using ${nonLocalActivations.length} of ${tierLimit} allowed site${
             tierLimit === 1 ? '' : 's'
-          }. Please upgrade your plan or deactivate an existing site.`,
+          } on the ${
+            license.tier.charAt(0).toUpperCase() + license.tier.slice(1)
+          } plan.${upgradeMessage}`,
+          tier_limit_reached: true,
+          current_tier: license.tier,
+          current_activations: nonLocalActivations.length,
+          tier_limit: tierLimit,
+          upgrade_available: !!upgradeInfo,
         });
       }
     }
