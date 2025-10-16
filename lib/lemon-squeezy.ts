@@ -47,6 +47,12 @@ export interface LemonSqueezyOrder {
         id: string;
       }>;
     };
+    'license-keys'?: {
+      data: Array<{
+        type: string;
+        id: string;
+      }>;
+    };
   };
 }
 
