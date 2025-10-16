@@ -114,7 +114,10 @@ export function calculateExpiryDate(
   return expiryDate;
 }
 
-export async function fetchLemonSqueezyData(endpoint: string, apiKeyOverride?: string): Promise<any> {
+export async function fetchLemonSqueezyData(
+  endpoint: string,
+  apiKeyOverride?: string
+): Promise<any> {
   const apiKey = apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY;
 
   if (!apiKey) {
@@ -138,18 +141,28 @@ export async function fetchLemonSqueezyData(endpoint: string, apiKeyOverride?: s
   return response.json();
 }
 
-export async function getProducts(apiKeyOverride?: string): Promise<LemonSqueezyProduct[]> {
+export async function getProducts(
+  apiKeyOverride?: string
+): Promise<LemonSqueezyProduct[]> {
   const data = await fetchLemonSqueezyData('/products', apiKeyOverride);
   return data.data || [];
 }
 
-export async function getVariants(apiKeyOverride?: string): Promise<LemonSqueezyVariant[]> {
+export async function getVariants(
+  apiKeyOverride?: string
+): Promise<LemonSqueezyVariant[]> {
   const data = await fetchLemonSqueezyData('/variants', apiKeyOverride);
   return data.data || [];
 }
 
-export async function getOrder(orderId: string, apiKeyOverride?: string): Promise<LemonSqueezyOrder> {
-  const data = await fetchLemonSqueezyData(`/orders/${orderId}?include=order-items`, apiKeyOverride);
+export async function getOrder(
+  orderId: string,
+  apiKeyOverride?: string
+): Promise<LemonSqueezyOrder> {
+  const data = await fetchLemonSqueezyData(
+    `/orders/${orderId}?include=order-items`,
+    apiKeyOverride
+  );
   return data.data;
 }
 
@@ -157,6 +170,9 @@ export async function getSubscription(
   subscriptionId: string,
   apiKeyOverride?: string
 ): Promise<LemonSqueezySubscription> {
-  const data = await fetchLemonSqueezyData(`/subscriptions/${subscriptionId}`, apiKeyOverride);
+  const data = await fetchLemonSqueezyData(
+    `/subscriptions/${subscriptionId}`,
+    apiKeyOverride
+  );
   return data.data;
 }

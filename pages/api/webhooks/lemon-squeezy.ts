@@ -138,6 +138,10 @@ async function handleOrderCreated(
       order_items_data_type:
         typeof orderDetails.relationships?.['order-items']?.data,
       order_items_data: orderDetails.relationships?.['order-items']?.data,
+      license_keys_exists: !!orderDetails.relationships?.['license-keys'],
+      license_keys_data_type:
+        typeof orderDetails.relationships?.['license-keys']?.data,
+      license_keys_data: orderDetails.relationships?.['license-keys']?.data,
     });
 
     console.log('[LS Webhook] Loaded order details', {
@@ -190,17 +194,89 @@ async function handleOrderCreated(
       product_name: orderItem?.attributes?.product_name,
       identifier: orderItem?.attributes?.identifier,
       has_product_options: !!orderItem?.attributes?.product_options,
+      product_options: orderItem?.attributes?.product_options,
       has_custom_data: !!orderItem?.attributes?.custom_data,
+      custom_data: orderItem?.attributes?.custom_data,
+      has_relationships: !!orderItem?.relationships,
+      relationships_keys: orderItem?.relationships
+        ? Object.keys(orderItem?.relationships)
+        : [],
     });
 
-    // Extract license key from order item
+    // DIAGNOSTIC: Try to fetch license key from order relationships
+    const licenseKeysRelationship =
+      orderDetails.relationships?.['license-keys'];
+    console.log('[LS Webhook] License keys from order relationships', {
+      has_license_keys_relationship: !!licenseKeysRelationship,
+      license_keys_data: licenseKeysRelationship?.data,
+      license_keys_count: Array.isArray(licenseKeysRelationship?.data)
+        ? licenseKeysRelationship.data.length
+        : 0,
+    });
+
+    // Try to fetch license key from Lemon Squeezy API if relationship exists
+    let fetchedLicenseKey = null;
+    if (
+      licenseKeysRelationship?.data &&
+      Array.isArray(licenseKeysRelationship.data) &&
+      licenseKeysRelationship.data.length > 0
+    ) {
+      const licenseKeyId = licenseKeysRelationship.data[0].id;
+      console.log('[LS Webhook] Attempting to fetch license key from API', {
+        license_key_id: licenseKeyId,
+      });
+
+      try {
+        const licenseKeyResponse = await fetch(
+          `https://api.lemonsqueezy.com/v1/license-keys/${licenseKeyId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${
+                apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
+              }`,
+              Accept: 'application/vnd.api+json',
+              'Content-Type': 'application/vnd.api+json',
+            },
+          }
+        );
+
+        if (licenseKeyResponse.ok) {
+          const licenseKeyData = await licenseKeyResponse.json();
+          console.log('[LS Webhook] License key API response', {
+            has_data: !!licenseKeyData.data,
+            attributes: licenseKeyData.data?.attributes,
+          });
+          fetchedLicenseKey = licenseKeyData.data?.attributes?.key;
+        } else {
+          console.error('[LS Webhook] Failed to fetch license key', {
+            status: licenseKeyResponse.status,
+            statusText: licenseKeyResponse.statusText,
+          });
+        }
+      } catch (error) {
+        console.error('[LS Webhook] Error fetching license key', error);
+      }
+    }
+
+    // Extract license key from order item (original logic)
     // License keys are typically in the product_options or custom_data
     const licenseKey =
+      fetchedLicenseKey ||
       orderItem.attributes.product_options?.license_key ||
       orderItem.attributes.custom_data?.license_key ||
       orderItem.attributes.identifier; // Fallback to order identifier
     console.log('[LS Webhook] Derived license key', {
       licenseKey_present: !!licenseKey,
+      source: fetchedLicenseKey
+        ? 'api_fetch'
+        : orderItem.attributes.product_options?.license_key
+        ? 'product_options'
+        : orderItem.attributes.custom_data?.license_key
+        ? 'custom_data'
+        : orderItem.attributes.identifier
+        ? 'identifier'
+        : 'none',
+      licenseKey_value: licenseKey ? licenseKey.substring(0, 8) + '...' : null,
     });
 
     // Derive tier and billing cycle from names to support test/live without hardcoded IDs
