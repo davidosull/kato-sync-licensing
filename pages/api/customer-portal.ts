@@ -33,8 +33,10 @@ export default async function handler(
     }
 
     // Fetch subscription details from Lemon Squeezy to get customer portal URL
-    const apiKey = process.env.LEMON_SQUEEZY_API_KEY || process.env.LEMON_SQUEEZY_API_KEY_TEST;
-    
+    const apiKey =
+      process.env.LEMON_SQUEEZY_API_KEY ||
+      process.env.LEMON_SQUEEZY_API_KEY_TEST;
+
     if (!apiKey) {
       return res.status(500).json({ error: 'API key not configured' });
     }
@@ -94,4 +96,3 @@ export default async function handler(
     });
   }
 }
-

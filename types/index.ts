@@ -42,6 +42,12 @@ export interface ActivateResponse {
   message: string;
   license?: License;
   activations?: Activation[];
+  // Tier limit error fields
+  tier_limit_reached?: boolean;
+  current_tier?: string;
+  current_activations?: number;
+  tier_limit?: number;
+  upgrade_available?: boolean;
 }
 
 export interface ValidateRequest {
