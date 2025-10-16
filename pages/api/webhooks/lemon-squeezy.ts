@@ -126,6 +126,17 @@ async function handleOrderCreated(
   try {
     // Get order details from Lemon Squeezy API
     const orderDetails = await getOrder(order.id, apiKeyOverride);
+    
+    // Diagnostic: log full response structure
+    console.log('[LS Webhook] Order API response structure', {
+      order_id: order.id,
+      has_relationships: !!orderDetails.relationships,
+      relationships_keys: orderDetails.relationships ? Object.keys(orderDetails.relationships) : [],
+      order_items_exists: !!(orderDetails.relationships?.['order-items']),
+      order_items_data_type: typeof orderDetails.relationships?.['order-items']?.data,
+      order_items_data: orderDetails.relationships?.['order-items']?.data,
+    });
+    
     console.log('[LS Webhook] Loaded order details', {
       order_id: order.id,
       email: orderDetails?.attributes?.user_email,
@@ -135,8 +146,11 @@ async function handleOrderCreated(
 
     // Extract license key from order
     // Lemon Squeezy includes license keys in the order items when license key generation is enabled
-    const orderItems = orderDetails.relationships['order-items'].data;
-    if (orderItems.length === 0) return;
+    const orderItems = orderDetails.relationships?.['order-items']?.data;
+    if (!orderItems || orderItems.length === 0) {
+      console.error('[LS Webhook] No order items found', { order_id: order.id });
+      return;
+    }
 
     // Get the first order item (assuming single item orders)
     const orderItemId = orderItems[0].id;
@@ -146,7 +160,9 @@ async function handleOrderCreated(
       `https://api.lemonsqueezy.com/v1/order-items/${orderItemId}`,
       {
         headers: {
-          Authorization: `Bearer ${apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY}`,
+          Authorization: `Bearer ${
+            apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
+          }`,
           Accept: 'application/vnd.api+json',
           'Content-Type': 'application/vnd.api+json',
         },
@@ -264,7 +280,9 @@ async function handleSubscriptionCreated(
       `https://api.lemonsqueezy.com/v1/order-items/${resolvedOrderItemId}`,
       {
         headers: {
-          Authorization: `Bearer ${apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY}`,
+          Authorization: `Bearer ${
+            apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
+          }`,
           Accept: 'application/vnd.api+json',
           'Content-Type': 'application/vnd.api+json',
         },
@@ -429,7 +447,7 @@ async function handlePaymentFailed(
       subscription.id,
       apiKeyOverride
     );
-    
+
     const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
 
     // Don't immediately expire - give grace period
