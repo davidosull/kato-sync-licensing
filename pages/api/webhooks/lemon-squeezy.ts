@@ -26,8 +26,11 @@ export default async function handler(
     // Early receipt log (before any verification)
     console.log('[LS Webhook] Received webhook request');
 
-    const signature = (req.headers['x-signature'] || req.headers['X-Signature']) as string;
-    const signingSecret = process.env.LEMON_SQUEEZY_SIGNING_SECRET!;
+    const signature = (req.headers['x-signature'] ||
+      req.headers['X-Signature']) as string;
+    const signingSecret = process.env.LEMON_SQUEEZY_SIGNING_SECRET || '';
+    const signingSecretTest =
+      process.env.LEMON_SQUEEZY_SIGNING_SECRET_TEST || '';
 
     if (!signature) {
       console.error('[LS Webhook] Missing signature header');
@@ -37,8 +40,18 @@ export default async function handler(
     // Verify webhook signature using RAW body (bodyParser disabled in route config)
     const rawPayload = await getRawBody(req);
     const payload = rawPayload.toString('utf8');
-    const isValid = verifyWebhookSignature(payload, signature, signingSecret);
-    console.log('[LS Webhook] Signature validation result', { isValid });
+    const isValidLive = signingSecret
+      ? verifyWebhookSignature(payload, signature, signingSecret)
+      : false;
+    const isValidTest = signingSecretTest
+      ? verifyWebhookSignature(payload, signature, signingSecretTest)
+      : false;
+    const isValid = isValidLive || isValidTest;
+    console.log('[LS Webhook] Signature validation result', {
+      isValid,
+      isValidLive,
+      isValidTest,
+    });
 
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid signature' });
