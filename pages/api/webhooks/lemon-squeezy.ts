@@ -62,9 +62,9 @@ export default async function handler(
     const eventName = webhook.meta.event_name;
 
     console.log(`Processing Lemon Squeezy webhook: ${eventName}`, {
-      test_mode: (req.body as any)?.meta?.test_mode ?? undefined,
-      data_type: (req.body as any)?.data?.type,
-      data_id: (req.body as any)?.data?.id,
+      test_mode: webhook.meta?.test_mode ?? undefined,
+      data_type: webhook.data?.type,
+      data_id: webhook.data?.id,
     });
 
     // Handle different event types
@@ -224,22 +224,96 @@ async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
   const subscription = webhook.data;
 
   try {
-    // Update license with subscription info
-    const subscriptionDetails = await getSubscription(subscription.id);
+    // Load subscription to access related order and fields
+    const sub = await getSubscription(subscription.id);
 
-    // Find license by customer email or order ID
-    // This is a simplified approach - you might need to store the relationship differently
-    const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
+    const orderId = String(sub.attributes.order_id);
+    const orderItemId = String(sub.attributes.order_item_id);
+    const customerEmail = sub.attributes.user_email;
 
-    await updateLicense(licenseKey, {
-      subscription_id: subscription.id,
+    // Fetch order details
+    const orderDetails = await getOrder(orderId);
+
+    // Prefer provided order_item_id; fallback to first item
+    let resolvedOrderItemId = orderItemId;
+    if (!resolvedOrderItemId) {
+      const items = orderDetails.relationships['order-items']?.data || [];
+      resolvedOrderItemId = items.length ? items[0].id : '';
+    }
+
+    if (!resolvedOrderItemId) {
+      console.error('[LS Webhook] No order item id available for subscription_created', { orderId });
+      return;
+    }
+
+    // Fetch order item to extract licence key and product metadata
+    const orderItemResponse = await fetch(
+      `https://api.lemonsqueezy.com/v1/order-items/${resolvedOrderItemId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.LEMON_SQUEEZY_API_KEY}`,
+          Accept: 'application/vnd.api+json',
+          'Content-Type': 'application/vnd.api+json',
+        },
+      }
+    );
+
+    if (!orderItemResponse.ok) {
+      console.error('[LS Webhook] Failed to fetch order item for subscription_created', {
+        order_item_id: resolvedOrderItemId,
+        status: orderItemResponse.status,
+        statusText: orderItemResponse.statusText,
+      });
+      return;
+    }
+
+    const orderItemData = await orderItemResponse.json();
+    const orderItem = orderItemData.data;
+
+    const licenseKey =
+      orderItem.attributes.product_options?.license_key ||
+      orderItem.attributes.custom_data?.license_key ||
+      orderItem.attributes.identifier;
+
+    const variantId = String(orderItem.attributes.variant_id);
+    const variantName: string = orderItem.attributes.variant_name || '';
+    const productName: string = orderItem.attributes.product_name || '';
+    const lowerName = `${productName} ${variantName}`.toLowerCase();
+
+    let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
+    if (lowerName.includes('agency')) tier = 'agency';
+    else if (lowerName.includes('enterprise') || lowerName.includes('unlimited')) tier = 'unlimited';
+
+    const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual') ? 'annual' : 'monthly';
+    const expiresAt = calculateExpiryDate(billingCycle);
+
+    // Attempt to create licence (idempotent by unique constraint on license_key if present)
+    const created = await createLicense({
+      license_key: licenseKey,
+      order_id: orderId,
+      variant_id: variantId,
+      customer_email: customerEmail,
       status: 'active',
-      expires_at: new Date(
-        subscriptionDetails.attributes.renews_at
-      ).toISOString(),
+      tier: tier as any,
+      billing_cycle: billingCycle as any,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt.toISOString(),
+      subscription_id: subscription.id,
     });
 
-    console.log(`Updated license with subscription ${subscription.id}`);
+    if (!created) {
+      // If create failed (e.g. exists), try updating with subscription id
+      await updateLicense(licenseKey, {
+        subscription_id: subscription.id,
+        status: 'active',
+        expires_at: expiresAt.toISOString(),
+      });
+    }
+
+    console.log('[LS Webhook] subscription_created processed', {
+      license_key: licenseKey ? 'present' : 'missing',
+      created: !!created,
+    });
   } catch (error) {
     console.error('Error handling subscription_created:', error);
   }
