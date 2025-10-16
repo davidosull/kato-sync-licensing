@@ -43,30 +43,50 @@ export default async function handler(
     }
 
     // Fetch subscription details from Lemon Squeezy to get customer portal URL
-    const apiKey =
-      process.env.LEMON_SQUEEZY_API_KEY ||
-      process.env.LEMON_SQUEEZY_API_KEY_TEST;
+    // Try live key first, then test key (since we don't track test_mode flag)
+    const liveKey = process.env.LEMON_SQUEEZY_API_KEY;
+    const testKey = process.env.LEMON_SQUEEZY_API_KEY_TEST;
 
-    if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured' });
+    let response = null;
+    let usedTestKey = false;
+
+    // Try live key first
+    if (liveKey) {
+      response = await fetch(
+        `https://api.lemonsqueezy.com/v1/subscriptions/${license.subscription_id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${liveKey}`,
+            Accept: 'application/vnd.api+json',
+            'Content-Type': 'application/vnd.api+json',
+          },
+        }
+      );
     }
 
-    const response = await fetch(
-      `https://api.lemonsqueezy.com/v1/subscriptions/${license.subscription_id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: 'application/vnd.api+json',
-          'Content-Type': 'application/vnd.api+json',
-        },
+    // If live key fails with 404, try test key
+    if (!response || response.status === 404) {
+      if (testKey) {
+        console.log('[Customer Portal] Live key failed, trying test key');
+        response = await fetch(
+          `https://api.lemonsqueezy.com/v1/subscriptions/${license.subscription_id}`,
+          {
+            headers: {
+              Authorization: `Bearer ${testKey}`,
+              Accept: 'application/vnd.api+json',
+              'Content-Type': 'application/vnd.api+json',
+            },
+          }
+        );
+        usedTestKey = true;
       }
-    );
+    }
 
-    if (!response.ok) {
+    if (!response || !response.ok) {
       console.error(
         `Failed to fetch subscription ${license.subscription_id}`,
-        response.status,
-        response.statusText
+        response?.status,
+        response?.statusText
       );
       return res.status(200).json({
         has_portal: false,
@@ -74,6 +94,11 @@ export default async function handler(
         message: 'Unable to fetch subscription details',
       });
     }
+
+    console.log('[Customer Portal] Successfully fetched subscription', {
+      subscription_id: license.subscription_id,
+      used_test_key: usedTestKey,
+    });
 
     const subscriptionData = await response.json();
     const subscription = subscriptionData.data;

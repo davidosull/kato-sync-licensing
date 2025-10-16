@@ -528,7 +528,7 @@ async function handleSubscriptionCreated(
 
     const sub = await getSubscription(subscription.id, apiKeyOverride);
     const orderId = String(sub.attributes.order_id);
-    
+
     console.log('[LS Webhook] Fetched subscription details', {
       subscription_id: subscription.id,
       order_id: orderId,
@@ -571,7 +571,7 @@ async function handleSubscriptionCreated(
       subscription_id: subscription.id,
       update_success: !!updated,
     });
-    
+
     return licenseKey;
   } catch (error) {
     console.error('Error handling subscription_created:', error);
