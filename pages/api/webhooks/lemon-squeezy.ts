@@ -62,7 +62,6 @@ export default async function handler(
     const eventName = webhook.meta.event_name;
 
     console.log(`Processing Lemon Squeezy webhook: ${eventName}`, {
-      test_mode: webhook.meta?.test_mode ?? undefined,
       data_type: webhook.data?.type,
       data_id: webhook.data?.id,
     });
@@ -242,7 +241,10 @@ async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
     }
 
     if (!resolvedOrderItemId) {
-      console.error('[LS Webhook] No order item id available for subscription_created', { orderId });
+      console.error(
+        '[LS Webhook] No order item id available for subscription_created',
+        { orderId }
+      );
       return;
     }
 
@@ -259,11 +261,14 @@ async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
     );
 
     if (!orderItemResponse.ok) {
-      console.error('[LS Webhook] Failed to fetch order item for subscription_created', {
-        order_item_id: resolvedOrderItemId,
-        status: orderItemResponse.status,
-        statusText: orderItemResponse.statusText,
-      });
+      console.error(
+        '[LS Webhook] Failed to fetch order item for subscription_created',
+        {
+          order_item_id: resolvedOrderItemId,
+          status: orderItemResponse.status,
+          statusText: orderItemResponse.statusText,
+        }
+      );
       return;
     }
 
@@ -282,9 +287,15 @@ async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
 
     let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
     if (lowerName.includes('agency')) tier = 'agency';
-    else if (lowerName.includes('enterprise') || lowerName.includes('unlimited')) tier = 'unlimited';
+    else if (
+      lowerName.includes('enterprise') ||
+      lowerName.includes('unlimited')
+    )
+      tier = 'unlimited';
 
-    const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual') ? 'annual' : 'monthly';
+    const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')
+      ? 'annual'
+      : 'monthly';
     const expiresAt = calculateExpiryDate(billingCycle);
 
     // Attempt to create licence (idempotent by unique constraint on license_key if present)
