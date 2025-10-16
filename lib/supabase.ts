@@ -58,6 +58,27 @@ export async function updateLicense(
   return data;
 }
 
+export async function upsertLicense(
+  licenseData: Partial<License>
+): Promise<License | null> {
+  // Use Supabase upsert with the license_key as the conflict target
+  const { data, error } = await supabase
+    .from('licenses')
+    .upsert(licenseData, {
+      onConflict: 'license_key',
+      ignoreDuplicates: false,
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error upserting license:', error);
+    return null;
+  }
+
+  return data;
+}
+
 // Activation operations
 export async function getActivations(
   licenseKey: string

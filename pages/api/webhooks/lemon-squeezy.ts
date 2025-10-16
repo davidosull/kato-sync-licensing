@@ -5,6 +5,7 @@ import { verifyWebhookSignature } from '@/lib/utils';
 import {
   createLicense,
   updateLicense,
+  upsertLicense,
   createSubscriptionEvent,
 } from '@/lib/supabase';
 import {
@@ -77,6 +78,10 @@ export default async function handler(
         await handleOrderCreated(webhook, apiKeyOverride);
         break;
 
+      case 'license_key_created':
+        await handleLicenseKeyCreated(webhook, apiKeyOverride);
+        break;
+
       case 'subscription_created':
         await handleSubscriptionCreated(webhook, apiKeyOverride);
         break;
@@ -101,19 +106,138 @@ export default async function handler(
         console.log(`Unhandled event: ${eventName}`);
     }
 
-    // Log the event (skip FK if no license_key yet)
-    const evt = await createSubscriptionEvent({
-      license_key: (webhook as any)?.data?.attributes?.license_key || '',
-      event_type: eventName,
-      event_data: webhook,
-      created_at: new Date().toISOString(),
-    });
-    console.log('[LS Webhook] Event logged to Supabase', { success: !!evt });
+    // Log the event (only if we have a license_key to reference)
+    // For license_key_created events, use the key from the webhook data
+    const licenseKeyForEvent =
+      eventName === 'license_key_created'
+        ? (webhook as any)?.data?.attributes?.key
+        : (webhook as any)?.data?.attributes?.license_key;
+
+    if (licenseKeyForEvent) {
+      const evt = await createSubscriptionEvent({
+        license_key: licenseKeyForEvent,
+        event_type: eventName,
+        event_data: webhook,
+        created_at: new Date().toISOString(),
+      });
+      console.log('[LS Webhook] Event logged to Supabase', {
+        success: !!evt,
+        event_type: eventName,
+      });
+    } else {
+      console.log(
+        '[LS Webhook] Skipping event log (no license_key available)',
+        {
+          event_type: eventName,
+        }
+      );
+    }
 
     return res.status(200).json({ success: true });
   } catch (error) {
     console.error('Webhook error:', error);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+async function handleLicenseKeyCreated(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
+  const licenseKeyData = webhook.data;
+
+  try {
+    console.log('[LS Webhook] Processing license_key_created', {
+      license_key_id: licenseKeyData.id,
+      order_id: licenseKeyData.attributes.order_id,
+    });
+
+    // Extract license key details from webhook data
+    const licenseKey = licenseKeyData.attributes.key;
+    const orderId = String(licenseKeyData.attributes.order_id);
+    const variantId = String(licenseKeyData.attributes.product_id); // We'll need to fetch proper variant
+    const customerEmail = licenseKeyData.attributes.user_email;
+
+    console.log('[LS Webhook] License key details', {
+      key: licenseKey ? licenseKey.substring(0, 8) + '...' : null,
+      order_id: orderId,
+      customer_email: customerEmail,
+      status: licenseKeyData.attributes.status,
+      activation_limit: licenseKeyData.attributes.activation_limit,
+    });
+
+    // Fetch order to get variant and product details
+    const orderItemId = String(licenseKeyData.attributes.order_item_id);
+    const orderItemResponse = await fetch(
+      `https://api.lemonsqueezy.com/v1/order-items/${orderItemId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${
+            apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
+          }`,
+          Accept: 'application/vnd.api+json',
+          'Content-Type': 'application/vnd.api+json',
+        },
+      }
+    );
+
+    if (!orderItemResponse.ok) {
+      console.error(`[LS Webhook] Failed to fetch order item ${orderItemId}`, {
+        status: orderItemResponse.status,
+        statusText: orderItemResponse.statusText,
+      });
+      return;
+    }
+
+    const orderItemData = await orderItemResponse.json();
+    const orderItem = orderItemData.data;
+
+    // Derive tier and billing cycle from product/variant names
+    const actualVariantId = String(orderItem.attributes.variant_id);
+    const variantName: string = orderItem.attributes.variant_name || '';
+    const productName: string = orderItem.attributes.product_name || '';
+
+    const lowerName = `${productName} ${variantName}`.toLowerCase();
+    let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
+    if (lowerName.includes('agency')) tier = 'agency';
+    else if (
+      lowerName.includes('enterprise') ||
+      lowerName.includes('unlimited')
+    )
+      tier = 'unlimited';
+
+    const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')
+      ? 'annual'
+      : 'monthly';
+
+    // Calculate expiry date
+    const expiresAt = calculateExpiryDate(billingCycle);
+
+    // Use upsert to create or update license in database
+    // This handles cases where order_created might have tried to create it first
+    const upserted = await upsertLicense({
+      license_key: licenseKey,
+      order_id: orderId,
+      variant_id: actualVariantId,
+      customer_email: customerEmail,
+      status: 'active',
+      tier: tier as any,
+      billing_cycle: billingCycle as any,
+      created_at: new Date().toISOString(),
+      expires_at: expiresAt.toISOString(),
+    });
+
+    console.log(
+      '[LS Webhook] License upserted from license_key_created event',
+      {
+        success: !!upserted,
+        license_key: licenseKey ? licenseKey.substring(0, 8) + '...' : null,
+        tier,
+        billing_cycle: billingCycle,
+      }
+    );
+  } catch (error) {
+    console.error('[LS Webhook] Error handling license_key_created:', error);
   }
 }
 
@@ -124,8 +248,56 @@ async function handleOrderCreated(
   const order = webhook.data;
 
   try {
-    // Get order details from Lemon Squeezy API
-    const orderDetails = await getOrder(order.id, apiKeyOverride);
+    // Get order details from Lemon Squeezy API (includes order-items and license-keys)
+    const orderResponse = await fetch(
+      `https://api.lemonsqueezy.com/v1/orders/${order.id}?include=order-items,license-keys`,
+      {
+        headers: {
+          Authorization: `Bearer ${
+            apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
+          }`,
+          Accept: 'application/vnd.api+json',
+          'Content-Type': 'application/vnd.api+json',
+        },
+      }
+    );
+
+    if (!orderResponse.ok) {
+      console.error('[LS Webhook] Failed to fetch order', {
+        order_id: order.id,
+        status: orderResponse.status,
+        statusText: orderResponse.statusText,
+      });
+      return;
+    }
+
+    const orderData = await orderResponse.json();
+    const orderDetails = orderData.data;
+
+    // DIAGNOSTIC: Log the full response structure including 'included' resources
+    console.log('[LS Webhook] Full order API response', {
+      order_id: order.id,
+      has_data: !!orderData.data,
+      has_included: !!orderData.included,
+      included_count: orderData.included?.length || 0,
+      included_types: orderData.included?.map((item: any) => item.type) || [],
+    });
+
+    // Log any license keys found in the included array
+    const includedLicenseKeys =
+      orderData.included?.filter((item: any) => item.type === 'license-keys') ||
+      [];
+
+    if (includedLicenseKeys.length > 0) {
+      console.log('[LS Webhook] License keys found in included array', {
+        count: includedLicenseKeys.length,
+        license_keys: includedLicenseKeys.map((lk: any) => ({
+          id: lk.id,
+          key: lk.attributes?.key,
+          status: lk.attributes?.status,
+        })),
+      });
+    }
 
     // Diagnostic: log full response structure
     console.log('[LS Webhook] Order API response structure', {
@@ -203,81 +375,48 @@ async function handleOrderCreated(
         : [],
     });
 
-    // DIAGNOSTIC: Try to fetch license key from order relationships
-    const licenseKeysRelationship =
-      orderDetails.relationships?.['license-keys'];
-    console.log('[LS Webhook] License keys from order relationships', {
-      has_license_keys_relationship: !!licenseKeysRelationship,
-      license_keys_data: licenseKeysRelationship?.data,
-      license_keys_count: Array.isArray(licenseKeysRelationship?.data)
-        ? licenseKeysRelationship.data.length
-        : 0,
-    });
+    // Extract license key from the included array (JSON:API format)
+    // The relationships contain references, but actual data is in the 'included' array
+    let licenseKey = null;
 
-    // Try to fetch license key from Lemon Squeezy API if relationship exists
-    let fetchedLicenseKey = null;
-    if (
-      licenseKeysRelationship?.data &&
-      Array.isArray(licenseKeysRelationship.data) &&
-      licenseKeysRelationship.data.length > 0
-    ) {
-      const licenseKeyId = licenseKeysRelationship.data[0].id;
-      console.log('[LS Webhook] Attempting to fetch license key from API', {
-        license_key_id: licenseKeyId,
+    if (includedLicenseKeys.length > 0) {
+      // Get the first license key
+      const licenseKeyData = includedLicenseKeys[0];
+      licenseKey = licenseKeyData.attributes?.key;
+
+      console.log('[LS Webhook] License key extracted from included array', {
+        licenseKey_present: !!licenseKey,
+        license_key_id: licenseKeyData.id,
+        status: licenseKeyData.attributes?.status,
+        activation_limit: licenseKeyData.attributes?.activation_limit,
+        licenseKey_value: licenseKey
+          ? licenseKey.substring(0, 8) + '...'
+          : null,
       });
-
-      try {
-        const licenseKeyResponse = await fetch(
-          `https://api.lemonsqueezy.com/v1/license-keys/${licenseKeyId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${
-                apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
-              }`,
-              Accept: 'application/vnd.api+json',
-              'Content-Type': 'application/vnd.api+json',
-            },
-          }
-        );
-
-        if (licenseKeyResponse.ok) {
-          const licenseKeyData = await licenseKeyResponse.json();
-          console.log('[LS Webhook] License key API response', {
-            has_data: !!licenseKeyData.data,
-            attributes: licenseKeyData.data?.attributes,
-          });
-          fetchedLicenseKey = licenseKeyData.data?.attributes?.key;
-        } else {
-          console.error('[LS Webhook] Failed to fetch license key', {
-            status: licenseKeyResponse.status,
-            statusText: licenseKeyResponse.statusText,
-          });
-        }
-      } catch (error) {
-        console.error('[LS Webhook] Error fetching license key', error);
-      }
+    } else {
+      console.log('[LS Webhook] No license keys found in included array', {
+        order_id: order.id,
+      });
     }
 
-    // Extract license key from order item (original logic)
-    // License keys are typically in the product_options or custom_data
-    const licenseKey =
-      fetchedLicenseKey ||
-      orderItem.attributes.product_options?.license_key ||
-      orderItem.attributes.custom_data?.license_key ||
-      orderItem.attributes.identifier; // Fallback to order identifier
-    console.log('[LS Webhook] Derived license key', {
-      licenseKey_present: !!licenseKey,
-      source: fetchedLicenseKey
-        ? 'api_fetch'
-        : orderItem.attributes.product_options?.license_key
-        ? 'product_options'
-        : orderItem.attributes.custom_data?.license_key
-        ? 'custom_data'
-        : orderItem.attributes.identifier
-        ? 'identifier'
-        : 'none',
-      licenseKey_value: licenseKey ? licenseKey.substring(0, 8) + '...' : null,
-    });
+    // If still no license key, try legacy methods as fallback
+    if (!licenseKey) {
+      licenseKey =
+        orderItem.attributes.product_options?.license_key ||
+        orderItem.attributes.custom_data?.license_key ||
+        orderItem.attributes.identifier;
+
+      console.log('[LS Webhook] Tried fallback license key extraction', {
+        licenseKey_present: !!licenseKey,
+        source: orderItem.attributes.product_options?.license_key
+          ? 'product_options'
+          : orderItem.attributes.custom_data?.license_key
+          ? 'custom_data'
+          : orderItem.attributes.identifier
+          ? 'identifier'
+          : 'none',
+      });
+    }
 
     // Derive tier and billing cycle from names to support test/live without hardcoded IDs
     const variantId = String(orderItem.attributes.variant_id);

@@ -166,9 +166,32 @@ export async function getOrder(
   apiKeyOverride?: string
 ): Promise<LemonSqueezyOrder> {
   const data = await fetchLemonSqueezyData(
-    `/orders/${orderId}?include=order-items`,
+    `/orders/${orderId}?include=order-items,license-keys`,
     apiKeyOverride
   );
+
+  // DIAGNOSTIC: Log the full API response including included resources
+  console.log('[LS API] Full order response', {
+    order_id: orderId,
+    has_data: !!data.data,
+    has_included: !!data.included,
+    included_count: data.included?.length || 0,
+    included_types: data.included?.map((item: any) => item.type) || [],
+  });
+
+  // Log full included data for debugging
+  if (data.included) {
+    data.included.forEach((item: any) => {
+      if (item.type === 'license-keys') {
+        console.log('[LS API] License key found in included', {
+          id: item.id,
+          type: item.type,
+          attributes: item.attributes,
+        });
+      }
+    });
+  }
+
   return data.data;
 }
 
