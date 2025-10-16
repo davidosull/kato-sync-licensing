@@ -6,12 +6,7 @@ import {
   updateLicense,
   createSubscriptionEvent,
 } from '@/lib/supabase';
-import {
-  getTierFromVariantId,
-  calculateExpiryDate,
-  getOrder,
-  getSubscription,
-} from '@/lib/lemon-squeezy';
+import { calculateExpiryDate, getOrder, getSubscription } from '@/lib/lemon-squeezy';
 
 export default async function handler(
   req: NextApiRequest,
@@ -129,17 +124,24 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       orderItem.attributes.custom_data?.license_key ||
       orderItem.attributes.identifier; // Fallback to order identifier
 
-    // Get variant ID from order item
-    const variantId = orderItem.attributes.variant_id;
-    const tierInfo = getTierFromVariantId(variantId);
+    // Derive tier and billing cycle from names to support test/live without hardcoded IDs
+    const variantId = String(orderItem.attributes.variant_id);
+    const variantName: string = orderItem.attributes.variant_name || '';
+    const productName: string = orderItem.attributes.product_name || '';
 
-    if (!tierInfo) {
-      console.error(`Unknown variant ID: ${variantId}`);
-      return;
-    }
+    // Normalise tier from product/variant names
+    const lowerName = `${productName} ${variantName}`.toLowerCase();
+    let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
+    if (lowerName.includes('agency')) tier = 'agency';
+    else if (lowerName.includes('enterprise') || lowerName.includes('unlimited')) tier = 'unlimited';
+
+    // Determine billing cycle from variant naming
+    const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')
+      ? 'annual'
+      : 'monthly';
 
     // Calculate expiry date
-    const expiresAt = calculateExpiryDate(tierInfo.billing_cycle);
+    const expiresAt = calculateExpiryDate(billingCycle);
 
     // Create license
     await createLicense({
@@ -148,8 +150,8 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       variant_id: variantId,
       customer_email: orderDetails.attributes.user_email,
       status: 'active',
-      tier: tierInfo.tier as any,
-      billing_cycle: tierInfo.billing_cycle as any,
+      tier: tier as any,
+      billing_cycle: billingCycle as any,
       created_at: new Date().toISOString(),
       expires_at: expiresAt.toISOString(),
     });
