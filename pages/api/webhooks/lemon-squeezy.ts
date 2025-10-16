@@ -102,7 +102,7 @@ export default async function handler(
     }
 
     // Log the event (skip FK if no license_key yet)
-    await createSubscriptionEvent({
+    const evt = await createSubscriptionEvent({
       license_key: (webhook as any)?.data?.attributes?.license_key || '',
       event_type: eventName,
       event_data: webhook,
@@ -117,12 +117,15 @@ export default async function handler(
   }
 }
 
-async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
+async function handleOrderCreated(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
   const order = webhook.data;
 
   try {
     // Get order details from Lemon Squeezy API
-    const orderDetails = await getOrder(order.id);
+    const orderDetails = await getOrder(order.id, apiKeyOverride);
     console.log('[LS Webhook] Loaded order details', {
       order_id: order.id,
       email: orderDetails?.attributes?.user_email,
@@ -143,7 +146,7 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       `https://api.lemonsqueezy.com/v1/order-items/${orderItemId}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.LEMON_SQUEEZY_API_KEY}`,
+          Authorization: `Bearer ${apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY}`,
           Accept: 'application/vnd.api+json',
           'Content-Type': 'application/vnd.api+json',
         },
@@ -224,19 +227,22 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
   }
 }
 
-async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
+async function handleSubscriptionCreated(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
   const subscription = webhook.data;
 
   try {
     // Load subscription to access related order and fields
-    const sub = await getSubscription(subscription.id);
+    const sub = await getSubscription(subscription.id, apiKeyOverride);
 
     const orderId = String(sub.attributes.order_id);
     const orderItemId = String(sub.attributes.order_item_id);
     const customerEmail = sub.attributes.user_email;
 
     // Fetch order details
-    const orderDetails = await getOrder(orderId);
+    const orderDetails = await getOrder(orderId, apiKeyOverride);
 
     // Prefer provided order_item_id; fallback to first item
     let resolvedOrderItemId = orderItemId;
@@ -258,7 +264,7 @@ async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
       `https://api.lemonsqueezy.com/v1/order-items/${resolvedOrderItemId}`,
       {
         headers: {
-          Authorization: `Bearer ${process.env.LEMON_SQUEEZY_API_KEY}`,
+          Authorization: `Bearer ${apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY}`,
           Accept: 'application/vnd.api+json',
           'Content-Type': 'application/vnd.api+json',
         },
@@ -335,11 +341,17 @@ async function handleSubscriptionCreated(webhook: LemonSqueezyWebhook) {
   }
 }
 
-async function handleSubscriptionUpdated(webhook: LemonSqueezyWebhook) {
+async function handleSubscriptionUpdated(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
   const subscription = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(subscription.id);
+    const subscriptionDetails = await getSubscription(
+      subscription.id,
+      apiKeyOverride
+    );
 
     const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
 
@@ -355,11 +367,17 @@ async function handleSubscriptionUpdated(webhook: LemonSqueezyWebhook) {
   }
 }
 
-async function handleSubscriptionCancelled(webhook: LemonSqueezyWebhook) {
+async function handleSubscriptionCancelled(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
   const subscription = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(subscription.id);
+    const subscriptionDetails = await getSubscription(
+      subscription.id,
+      apiKeyOverride
+    );
 
     const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
 
@@ -373,11 +391,17 @@ async function handleSubscriptionCancelled(webhook: LemonSqueezyWebhook) {
   }
 }
 
-async function handlePaymentSuccess(webhook: LemonSqueezyWebhook) {
+async function handlePaymentSuccess(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
   const subscription = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(subscription.id);
+    const subscriptionDetails = await getSubscription(
+      subscription.id,
+      apiKeyOverride
+    );
 
     const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
 
@@ -394,12 +418,18 @@ async function handlePaymentSuccess(webhook: LemonSqueezyWebhook) {
   }
 }
 
-async function handlePaymentFailed(webhook: LemonSqueezyWebhook) {
+async function handlePaymentFailed(
+  webhook: LemonSqueezyWebhook,
+  apiKeyOverride?: string
+) {
   const subscription = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(subscription.id);
-
+    const subscriptionDetails = await getSubscription(
+      subscription.id,
+      apiKeyOverride
+    );
+    
     const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
 
     // Don't immediately expire - give grace period
