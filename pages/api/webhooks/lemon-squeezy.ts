@@ -66,39 +66,44 @@ export default async function handler(
       data_id: webhook.data?.id,
     });
 
+    // Choose LS API key depending on whether this was validated by test or live secret
+    const apiKeyOverride = isValidTest
+      ? process.env.LEMON_SQUEEZY_API_KEY_TEST
+      : process.env.LEMON_SQUEEZY_API_KEY;
+
     // Handle different event types
     switch (eventName) {
       case 'order_created':
-        await handleOrderCreated(webhook);
+        await handleOrderCreated(webhook, apiKeyOverride);
         break;
 
       case 'subscription_created':
-        await handleSubscriptionCreated(webhook);
+        await handleSubscriptionCreated(webhook, apiKeyOverride);
         break;
 
       case 'subscription_updated':
-        await handleSubscriptionUpdated(webhook);
+        await handleSubscriptionUpdated(webhook, apiKeyOverride);
         break;
 
       case 'subscription_cancelled':
-        await handleSubscriptionCancelled(webhook);
+        await handleSubscriptionCancelled(webhook, apiKeyOverride);
         break;
 
       case 'subscription_payment_success':
-        await handlePaymentSuccess(webhook);
+        await handlePaymentSuccess(webhook, apiKeyOverride);
         break;
 
       case 'subscription_payment_failed':
-        await handlePaymentFailed(webhook);
+        await handlePaymentFailed(webhook, apiKeyOverride);
         break;
 
       default:
         console.log(`Unhandled event: ${eventName}`);
     }
 
-    // Log the event
-    const evt = await createSubscriptionEvent({
-      license_key: '', // Will be populated by specific handlers
+    // Log the event (skip FK if no license_key yet)
+    await createSubscriptionEvent({
+      license_key: (webhook as any)?.data?.attributes?.license_key || '',
       event_type: eventName,
       event_data: webhook,
       created_at: new Date().toISOString(),
