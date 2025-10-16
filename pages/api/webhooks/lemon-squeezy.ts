@@ -522,12 +522,29 @@ async function handleSubscriptionCreated(
   const subscription = webhook.data;
 
   try {
+    console.log('[LS Webhook] Processing subscription_created', {
+      subscription_id: subscription.id,
+    });
+
     const sub = await getSubscription(subscription.id, apiKeyOverride);
     const orderId = String(sub.attributes.order_id);
+    
+    console.log('[LS Webhook] Fetched subscription details', {
+      subscription_id: subscription.id,
+      order_id: orderId,
+      variant_name: sub.attributes.variant_name,
+      status: sub.attributes.status,
+    });
+
     const licenseKey = await resolveLicenseKeyByOrderId(
       orderId,
       apiKeyOverride
     );
+
+    console.log('[LS Webhook] Resolved license key', {
+      license_key_found: !!licenseKey,
+      license_key: licenseKey ? licenseKey.substring(0, 8) + '...' : null,
+    });
 
     if (!licenseKey) {
       console.warn(
@@ -543,16 +560,18 @@ async function handleSubscriptionCreated(
         : 'monthly'
     );
 
-    await updateLicense(licenseKey, {
+    const updated = await updateLicense(licenseKey, {
       subscription_id: subscription.id,
       status: 'active',
       expires_at: expiresAt.toISOString(),
     });
 
-    console.log('[LS Webhook] subscription_created processed', {
-      license_key: 'present',
+    console.log('[LS Webhook] subscription_created: updated license', {
+      license_key: licenseKey.substring(0, 8) + '...',
       subscription_id: subscription.id,
+      update_success: !!updated,
     });
+    
     return licenseKey;
   } catch (error) {
     console.error('Error handling subscription_created:', error);
