@@ -14,6 +14,37 @@ import {
   getSubscription,
 } from '@/lib/lemon-squeezy';
 
+// Helper: resolve license key for an order via included license-keys
+async function resolveLicenseKeyByOrderId(
+  orderId: string,
+  apiKeyOverride?: string
+): Promise<string | null> {
+  try {
+    const orderData: any = await fetch(
+      `https://api.lemonsqueezy.com/v1/orders/${orderId}?include=license-keys`,
+      {
+        headers: {
+          Authorization: `Bearer ${
+            apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
+          }`,
+          Accept: 'application/vnd.api+json',
+          'Content-Type': 'application/vnd.api+json',
+        },
+      }
+    ).then((r) => r.json());
+
+    const included = orderData?.included || [];
+    const lk = included.find((i: any) => i.type === 'license-keys');
+    return lk?.attributes?.key || null;
+  } catch (e) {
+    console.error('[LS Webhook] Failed to resolve license key by order id', {
+      orderId,
+      error: e,
+    });
+    return null;
+  }
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -73,33 +104,49 @@ export default async function handler(
       : process.env.LEMON_SQUEEZY_API_KEY;
 
     // Handle different event types
+    let resolvedLicenseKey: string | null = null;
     switch (eventName) {
       case 'order_created':
-        await handleOrderCreated(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handleOrderCreated(webhook, apiKeyOverride);
         break;
 
       case 'license_key_created':
-        await handleLicenseKeyCreated(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handleLicenseKeyCreated(
+          webhook,
+          apiKeyOverride
+        );
         break;
 
       case 'subscription_created':
-        await handleSubscriptionCreated(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handleSubscriptionCreated(
+          webhook,
+          apiKeyOverride
+        );
         break;
 
       case 'subscription_updated':
-        await handleSubscriptionUpdated(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handleSubscriptionUpdated(
+          webhook,
+          apiKeyOverride
+        );
         break;
 
       case 'subscription_cancelled':
-        await handleSubscriptionCancelled(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handleSubscriptionCancelled(
+          webhook,
+          apiKeyOverride
+        );
         break;
 
       case 'subscription_payment_success':
-        await handlePaymentSuccess(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handlePaymentSuccess(
+          webhook,
+          apiKeyOverride
+        );
         break;
 
       case 'subscription_payment_failed':
-        await handlePaymentFailed(webhook, apiKeyOverride);
+        resolvedLicenseKey = await handlePaymentFailed(webhook, apiKeyOverride);
         break;
 
       default:
@@ -109,9 +156,10 @@ export default async function handler(
     // Log the event (only if we have a license_key to reference)
     // For license_key_created events, use the key from the webhook data
     const licenseKeyForEvent =
-      eventName === 'license_key_created'
+      resolvedLicenseKey ||
+      (eventName === 'license_key_created'
         ? (webhook as any)?.data?.attributes?.key
-        : (webhook as any)?.data?.attributes?.license_key;
+        : (webhook as any)?.data?.attributes?.license_key);
 
     if (licenseKeyForEvent) {
       const evt = await createSubscriptionEvent({
@@ -143,7 +191,7 @@ export default async function handler(
 async function handleLicenseKeyCreated(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
+): Promise<string | null> {
   const licenseKeyData = webhook.data;
 
   try {
@@ -186,7 +234,7 @@ async function handleLicenseKeyCreated(
         status: orderItemResponse.status,
         statusText: orderItemResponse.statusText,
       });
-      return;
+      return null;
     }
 
     const orderItemData = await orderItemResponse.json();
@@ -236,15 +284,17 @@ async function handleLicenseKeyCreated(
         billing_cycle: billingCycle,
       }
     );
+    return licenseKey || null;
   } catch (error) {
     console.error('[LS Webhook] Error handling license_key_created:', error);
+    return null;
   }
 }
 
 async function handleOrderCreated(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
+): Promise<string | null> {
   const order = webhook.data;
 
   try {
@@ -268,7 +318,7 @@ async function handleOrderCreated(
         status: orderResponse.status,
         statusText: orderResponse.statusText,
       });
-      return;
+      return null;
     }
 
     const orderData = await orderResponse.json();
@@ -330,7 +380,7 @@ async function handleOrderCreated(
       console.error('[LS Webhook] No order items found', {
         order_id: order.id,
       });
-      return;
+      return null;
     }
 
     // Get the first order item (assuming single item orders)
@@ -355,7 +405,7 @@ async function handleOrderCreated(
         status: orderItemResponse.status,
         statusText: orderItemResponse.statusText,
       });
-      return;
+      return null;
     }
 
     const orderItemData = await orderItemResponse.json();
@@ -458,224 +508,170 @@ async function handleOrderCreated(
       success: !!created,
       license_key: licenseKey,
     });
+    return licenseKey || null;
   } catch (error) {
     console.error('Error handling order_created:', error);
+    return null;
   }
 }
 
 async function handleSubscriptionCreated(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
+): Promise<string | null> {
   const subscription = webhook.data;
 
   try {
-    // Load subscription to access related order and fields
     const sub = await getSubscription(subscription.id, apiKeyOverride);
-
     const orderId = String(sub.attributes.order_id);
-    const orderItemId = String(sub.attributes.order_item_id);
-    const customerEmail = sub.attributes.user_email;
-
-    // Fetch order details
-    const orderDetails = await getOrder(orderId, apiKeyOverride);
-
-    // Prefer provided order_item_id; fallback to first item
-    let resolvedOrderItemId = orderItemId;
-    if (!resolvedOrderItemId) {
-      const items = orderDetails.relationships['order-items']?.data || [];
-      resolvedOrderItemId = items.length ? items[0].id : '';
-    }
-
-    if (!resolvedOrderItemId) {
-      console.error(
-        '[LS Webhook] No order item id available for subscription_created',
-        { orderId }
-      );
-      return;
-    }
-
-    // Fetch order item to extract licence key and product metadata
-    const orderItemResponse = await fetch(
-      `https://api.lemonsqueezy.com/v1/order-items/${resolvedOrderItemId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${
-            apiKeyOverride || process.env.LEMON_SQUEEZY_API_KEY
-          }`,
-          Accept: 'application/vnd.api+json',
-          'Content-Type': 'application/vnd.api+json',
-        },
-      }
+    const licenseKey = await resolveLicenseKeyByOrderId(
+      orderId,
+      apiKeyOverride
     );
 
-    if (!orderItemResponse.ok) {
-      console.error(
-        '[LS Webhook] Failed to fetch order item for subscription_created',
-        {
-          order_item_id: resolvedOrderItemId,
-          status: orderItemResponse.status,
-          statusText: orderItemResponse.statusText,
-        }
+    if (!licenseKey) {
+      console.warn(
+        '[LS Webhook] subscription_created: could not resolve license key',
+        { orderId }
       );
-      return;
+      return null;
     }
 
-    const orderItemData = await orderItemResponse.json();
-    const orderItem = orderItemData.data;
+    const expiresAt = calculateExpiryDate(
+      sub.attributes.variant_name?.toLowerCase().includes('annual')
+        ? 'annual'
+        : 'monthly'
+    );
 
-    const licenseKey =
-      orderItem.attributes.product_options?.license_key ||
-      orderItem.attributes.custom_data?.license_key ||
-      orderItem.attributes.identifier;
-
-    const variantId = String(orderItem.attributes.variant_id);
-    const variantName: string = orderItem.attributes.variant_name || '';
-    const productName: string = orderItem.attributes.product_name || '';
-    const lowerName = `${productName} ${variantName}`.toLowerCase();
-
-    let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
-    if (lowerName.includes('agency')) tier = 'agency';
-    else if (
-      lowerName.includes('enterprise') ||
-      lowerName.includes('unlimited')
-    )
-      tier = 'unlimited';
-
-    const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')
-      ? 'annual'
-      : 'monthly';
-    const expiresAt = calculateExpiryDate(billingCycle);
-
-    // Attempt to create licence (idempotent by unique constraint on license_key if present)
-    const created = await createLicense({
-      license_key: licenseKey,
-      order_id: orderId,
-      variant_id: variantId,
-      customer_email: customerEmail,
-      status: 'active',
-      tier: tier as any,
-      billing_cycle: billingCycle as any,
-      created_at: new Date().toISOString(),
-      expires_at: expiresAt.toISOString(),
+    await updateLicense(licenseKey, {
       subscription_id: subscription.id,
+      status: 'active',
+      expires_at: expiresAt.toISOString(),
     });
-
-    if (!created) {
-      // If create failed (e.g. exists), try updating with subscription id
-      await updateLicense(licenseKey, {
-        subscription_id: subscription.id,
-        status: 'active',
-        expires_at: expiresAt.toISOString(),
-      });
-    }
 
     console.log('[LS Webhook] subscription_created processed', {
-      license_key: licenseKey ? 'present' : 'missing',
-      created: !!created,
+      license_key: 'present',
+      subscription_id: subscription.id,
     });
+    return licenseKey;
   } catch (error) {
     console.error('Error handling subscription_created:', error);
+    return null;
   }
 }
 
 async function handleSubscriptionUpdated(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
+): Promise<string | null> {
   const subscription = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(
-      subscription.id,
+    const sub = await getSubscription(subscription.id, apiKeyOverride);
+    const orderId = String(sub.attributes.order_id);
+    const licenseKey = await resolveLicenseKeyByOrderId(
+      orderId,
       apiKeyOverride
     );
 
-    const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
+    if (!licenseKey) return null;
 
     await updateLicense(licenseKey, {
-      expires_at: new Date(
-        subscriptionDetails.attributes.renews_at
-      ).toISOString(),
+      expires_at: new Date(sub.attributes.renews_at).toISOString(),
     });
 
     console.log(`Updated license expiry for subscription ${subscription.id}`);
+    return licenseKey;
   } catch (error) {
     console.error('Error handling subscription_updated:', error);
+    return null;
   }
 }
 
 async function handleSubscriptionCancelled(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
+): Promise<string | null> {
   const subscription = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(
-      subscription.id,
+    const sub = await getSubscription(subscription.id, apiKeyOverride);
+    const orderId = String(sub.attributes.order_id);
+    const licenseKey = await resolveLicenseKeyByOrderId(
+      orderId,
       apiKeyOverride
     );
 
-    const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
+    if (!licenseKey) return null;
 
     await updateLicense(licenseKey, {
       status: 'cancelled',
     });
 
     console.log(`Cancelled license for subscription ${subscription.id}`);
+    return licenseKey;
   } catch (error) {
     console.error('Error handling subscription_cancelled:', error);
+    return null;
   }
 }
 
 async function handlePaymentSuccess(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
-  const subscription = webhook.data;
+): Promise<string | null> {
+  const invoice = webhook.data; // subscription-invoices
 
   try {
-    const subscriptionDetails = await getSubscription(
-      subscription.id,
+    const subscriptionId = String(
+      (invoice as any)?.attributes?.subscription_id || invoice.id
+    );
+    const sub = await getSubscription(subscriptionId, apiKeyOverride);
+    const orderId = String(sub.attributes.order_id);
+    const licenseKey = await resolveLicenseKeyByOrderId(
+      orderId,
       apiKeyOverride
     );
 
-    const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
+    if (!licenseKey) return null;
 
     await updateLicense(licenseKey, {
       status: 'active',
-      expires_at: new Date(
-        subscriptionDetails.attributes.renews_at
-      ).toISOString(),
+      expires_at: new Date(sub.attributes.renews_at).toISOString(),
     });
 
-    console.log(`Payment successful for subscription ${subscription.id}`);
+    console.log(`Payment successful for subscription ${subscriptionId}`);
+    return licenseKey;
   } catch (error) {
     console.error('Error handling payment_success:', error);
+    return null;
   }
 }
 
 async function handlePaymentFailed(
   webhook: LemonSqueezyWebhook,
   apiKeyOverride?: string
-) {
-  const subscription = webhook.data;
+): Promise<string | null> {
+  const invoice = webhook.data;
 
   try {
-    const subscriptionDetails = await getSubscription(
-      subscription.id,
+    const subscriptionId = String(
+      (invoice as any)?.attributes?.subscription_id || invoice.id
+    );
+    const sub = await getSubscription(subscriptionId, apiKeyOverride);
+    const orderId = String(sub.attributes.order_id);
+    const licenseKey = await resolveLicenseKeyByOrderId(
+      orderId,
       apiKeyOverride
     );
 
-    const licenseKey = subscriptionDetails.attributes.user_email; // Adjust based on your setup
-
-    // Don't immediately expire - give grace period
     console.log(
-      `Payment failed for subscription ${subscription.id}, license will expire on ${subscriptionDetails.attributes.ends_at}`
+      `Payment failed for subscription ${subscriptionId}, license will expire on ${sub.attributes.ends_at}`
     );
+    return licenseKey || null;
   } catch (error) {
     console.error('Error handling payment_failed:', error);
+    return null;
   }
 }
 
