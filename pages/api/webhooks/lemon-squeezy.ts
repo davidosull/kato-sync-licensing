@@ -17,6 +17,7 @@ export default async function handler(
   res: NextApiResponse
 ) {
   if (req.method !== 'POST') {
+    console.warn('[LS Webhook] Non-POST request received');
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
@@ -25,25 +26,26 @@ export default async function handler(
     const signingSecret = process.env.LEMON_SQUEEZY_SIGNING_SECRET!;
 
     if (!signature) {
+      console.error('[LS Webhook] Missing signature header');
       return res.status(400).json({ error: 'Missing signature' });
     }
 
-    // Verify webhook signature (note: uses parsed JSON; if this fails we may need raw body)
+    // Verify webhook signature
     const payload = JSON.stringify(req.body);
     const isValid = verifyWebhookSignature(payload, signature, signingSecret);
+    console.log('[LS Webhook] Signature validation result', { isValid });
 
     if (!isValid) {
-      console.error('[LS Webhook] Invalid signature. Hint: Next.js may alter body; raw body config may be required.');
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
     const webhook: LemonSqueezyWebhook = req.body;
     const eventName = webhook.meta.event_name;
 
-    console.log(`[LS Webhook] Event received: ${eventName}`, {
-      test_mode: (webhook as any)?.meta?.test_mode ?? undefined,
-      data_type: webhook.data?.type,
-      data_id: webhook.data?.id,
+    console.log(`Processing Lemon Squeezy webhook: ${eventName}`, {
+      test_mode: (req.body as any)?.meta?.test_mode ?? undefined,
+      data_type: (req.body as any)?.data?.type,
+      data_id: (req.body as any)?.data?.id,
     });
 
     // Handle different event types
@@ -77,12 +79,13 @@ export default async function handler(
     }
 
     // Log the event
-    await createSubscriptionEvent({
+    const evt = await createSubscriptionEvent({
       license_key: '', // Will be populated by specific handlers
       event_type: eventName,
       event_data: webhook,
       created_at: new Date().toISOString(),
     });
+    console.log('[LS Webhook] Event logged to Supabase', { success: !!evt });
 
     return res.status(200).json({ success: true });
   } catch (error) {
@@ -96,9 +99,9 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
 
   try {
     // Get order details from Lemon Squeezy API
-    console.log('[LS Webhook] handleOrderCreated: fetching order details', { order_id: order.id });
     const orderDetails = await getOrder(order.id);
-    console.log('[LS Webhook] order details loaded', {
+    console.log('[LS Webhook] Loaded order details', {
+      order_id: order.id,
       email: orderDetails?.attributes?.user_email,
       order_items_count: orderDetails?.relationships?.['order-items']?.data?.length,
     });
@@ -106,10 +109,7 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
     // Extract license key from order
     // Lemon Squeezy includes license keys in the order items when license key generation is enabled
     const orderItems = orderDetails.relationships['order-items'].data;
-    if (orderItems.length === 0) {
-      console.warn('[LS Webhook] No order items found');
-      return;
-    }
+    if (orderItems.length === 0) return;
 
     // Get the first order item (assuming single item orders)
     const orderItemId = orderItems[0].id;
@@ -127,16 +127,22 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
     );
 
     if (!orderItemResponse.ok) {
-      console.error(`[LS Webhook] Failed to fetch order item ${orderItemId}`, { status: orderItemResponse.status, statusText: orderItemResponse.statusText });
+      console.error(`Failed to fetch order item ${orderItemId}`, {
+        status: orderItemResponse.status,
+        statusText: orderItemResponse.statusText,
+      });
       return;
     }
 
     const orderItemData = await orderItemResponse.json();
     const orderItem = orderItemData.data;
-    console.log('[LS Webhook] order item loaded', {
+    console.log('[LS Webhook] Order item loaded', {
       variant_id: orderItem?.attributes?.variant_id,
       variant_name: orderItem?.attributes?.variant_name,
       product_name: orderItem?.attributes?.product_name,
+      identifier: orderItem?.attributes?.identifier,
+      has_product_options: !!orderItem?.attributes?.product_options,
+      has_custom_data: !!orderItem?.attributes?.custom_data,
     });
 
     // Extract license key from order item
@@ -145,9 +151,7 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       orderItem.attributes.product_options?.license_key ||
       orderItem.attributes.custom_data?.license_key ||
       orderItem.attributes.identifier; // Fallback to order identifier
-    if (!licenseKey) {
-      console.warn('[LS Webhook] No license key present on order item attributes');
-    }
+    console.log('[LS Webhook] Derived license key', { licenseKey_present: !!licenseKey });
 
     // Derive tier and billing cycle from names to support test/live without hardcoded IDs
     const variantId = String(orderItem.attributes.variant_id);
@@ -185,11 +189,7 @@ async function handleOrderCreated(webhook: LemonSqueezyWebhook) {
       expires_at: expiresAt.toISOString(),
     });
 
-    if (created) {
-      console.log('[LS Webhook] License created', { order_id: order.id, license_key: licenseKey });
-    } else {
-      console.error('[LS Webhook] License creation returned null');
-    }
+    console.log('[LS Webhook] License insert result', { success: !!created, license_key: licenseKey });
   } catch (error) {
     console.error('Error handling order_created:', error);
   }
