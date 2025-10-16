@@ -45,7 +45,7 @@ export function getTierLimit(tier: string): number {
   const limits: Record<string, number> = {
     freelancer: 1,
     agency: 5,
-    unlimited: -1, // -1 means unlimited
+    enterprise: -1, // -1 means unlimited
   };
 
   return limits[tier] || 0;

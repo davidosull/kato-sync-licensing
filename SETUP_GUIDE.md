@@ -67,8 +67,8 @@ Create 6 variants in Lemon Squeezy:
 - Freelancer Annual ($90)
 - Agency Monthly ($32)
 - Agency Annual ($320)
-- Unlimited Monthly ($45)
-- Unlimited Annual ($450)
+- Enterprise Monthly ($45)
+- Enterprise Annual ($450)
 
 ### 3.2 Enable License Keys
 

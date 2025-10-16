@@ -95,8 +95,8 @@ export const VARIANT_TIER_MAP: Record<
   '1032736': { tier: 'freelancer', billing_cycle: 'monthly' },
   '1032737': { tier: 'agency', billing_cycle: 'annual' },
   '1032738': { tier: 'agency', billing_cycle: 'monthly' },
-  '1032739': { tier: 'unlimited', billing_cycle: 'annual' },
-  '1032740': { tier: 'unlimited', billing_cycle: 'monthly' },
+  '1032739': { tier: 'enterprise', billing_cycle: 'annual' },
+  '1032740': { tier: 'enterprise', billing_cycle: 'monthly' },
 };
 
 export function getTierFromVariantId(

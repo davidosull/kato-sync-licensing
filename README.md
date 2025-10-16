@@ -38,7 +38,7 @@ Run the SQL schema in `supabase-schema.sql` in your Supabase SQL editor.
 
    - Freelancer Monthly ($9) + Annual ($90)
    - Agency Monthly ($32) + Annual ($320)
-   - Unlimited Monthly ($45) + Annual ($450)
+   - Enterprise Monthly ($45) + Annual ($450)
 
 2. Enable license key generation on all products
 
@@ -157,7 +157,7 @@ npm run dev
 
 - **Freelancer**: 1 site activation
 - **Agency**: 5 site activations
-- **Unlimited**: Unlimited site activations
+- **Enterprise**: Unlimited site activations
 
 Local environments (localhost, .local, .test, .dev, etc.) don't count toward activation limits.
 

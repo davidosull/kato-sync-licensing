@@ -6,7 +6,7 @@ export interface License {
   variant_id: string;
   customer_email: string;
   status: 'active' | 'expired' | 'cancelled';
-  tier: 'freelancer' | 'agency' | 'unlimited';
+  tier: 'freelancer' | 'agency' | 'enterprise';
   billing_cycle: 'monthly' | 'annual';
   created_at: string;
   expires_at: string;
@@ -102,7 +102,7 @@ export interface LemonSqueezyWebhook {
 export const TIER_LIMITS = {
   freelancer: 1,
   agency: 5,
-  unlimited: -1, // -1 means unlimited
+  enterprise: -1, // -1 means unlimited
 } as const;
 
 export type TierType = keyof typeof TIER_LIMITS;

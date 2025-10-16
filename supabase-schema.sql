@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS licenses (
     variant_id VARCHAR(255) NOT NULL,
     customer_email VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL CHECK (status IN ('active', 'expired', 'cancelled')),
-    tier VARCHAR(50) NOT NULL CHECK (tier IN ('freelancer', 'agency', 'unlimited')),
+    tier VARCHAR(50) NOT NULL CHECK (tier IN ('freelancer', 'agency', 'enterprise')),
     billing_cycle VARCHAR(50) NOT NULL CHECK (billing_cycle IN ('monthly', 'annual')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,

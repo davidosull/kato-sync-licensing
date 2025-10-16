@@ -246,13 +246,13 @@ async function handleLicenseKeyCreated(
     const productName: string = orderItem.attributes.product_name || '';
 
     const lowerName = `${productName} ${variantName}`.toLowerCase();
-    let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
+    let tier: 'freelancer' | 'agency' | 'enterprise' = 'freelancer';
     if (lowerName.includes('agency')) tier = 'agency';
     else if (
       lowerName.includes('enterprise') ||
       lowerName.includes('unlimited')
     )
-      tier = 'unlimited';
+      tier = 'enterprise';
 
     const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')
       ? 'annual'
@@ -475,13 +475,13 @@ async function handleOrderCreated(
 
     // Normalise tier from product/variant names
     const lowerName = `${productName} ${variantName}`.toLowerCase();
-    let tier: 'freelancer' | 'agency' | 'unlimited' = 'freelancer';
+    let tier: 'freelancer' | 'agency' | 'enterprise' = 'freelancer';
     if (lowerName.includes('agency')) tier = 'agency';
     else if (
       lowerName.includes('enterprise') ||
       lowerName.includes('unlimited')
     )
-      tier = 'unlimited';
+      tier = 'enterprise';
 
     // Determine billing cycle from variant naming
     const billingCycle: 'monthly' | 'annual' = lowerName.includes('annual')

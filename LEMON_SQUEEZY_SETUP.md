@@ -20,8 +20,8 @@ This guide covers the complete setup of Lemon Squeezy for KatoSync, including pr
 | Freelancer | Monthly | 1032736    | $9    |
 | Agency     | Annual  | 1032737    | $320  |
 | Agency     | Monthly | 1032738    | $32   |
-| Unlimited  | Annual  | 1032739    | $450  |
-| Unlimited  | Monthly | 1032740    | $45   |
+| Enterprise | Annual  | 1032739    | $450  |
+| Enterprise | Monthly | 1032740    | $45   |
 
 ## License Key Configuration
 
@@ -167,8 +167,8 @@ Direct checkout URLs for each variant:
 - Freelancer Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032736`
 - Agency Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032737`
 - Agency Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032738`
-- Unlimited Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032739`
-- Unlimited Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032740`
+- Enterprise Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032739`
+- Enterprise Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032740`
 
 ## Troubleshooting
 
