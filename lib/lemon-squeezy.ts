@@ -149,7 +149,7 @@ export async function getVariants(apiKeyOverride?: string): Promise<LemonSqueezy
 }
 
 export async function getOrder(orderId: string, apiKeyOverride?: string): Promise<LemonSqueezyOrder> {
-  const data = await fetchLemonSqueezyData(`/orders/${orderId}`, apiKeyOverride);
+  const data = await fetchLemonSqueezyData(`/orders/${orderId}?include=order-items`, apiKeyOverride);
   return data.data;
 }
 

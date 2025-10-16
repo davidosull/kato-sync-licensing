@@ -126,17 +126,20 @@ async function handleOrderCreated(
   try {
     // Get order details from Lemon Squeezy API
     const orderDetails = await getOrder(order.id, apiKeyOverride);
-    
+
     // Diagnostic: log full response structure
     console.log('[LS Webhook] Order API response structure', {
       order_id: order.id,
       has_relationships: !!orderDetails.relationships,
-      relationships_keys: orderDetails.relationships ? Object.keys(orderDetails.relationships) : [],
-      order_items_exists: !!(orderDetails.relationships?.['order-items']),
-      order_items_data_type: typeof orderDetails.relationships?.['order-items']?.data,
+      relationships_keys: orderDetails.relationships
+        ? Object.keys(orderDetails.relationships)
+        : [],
+      order_items_exists: !!orderDetails.relationships?.['order-items'],
+      order_items_data_type:
+        typeof orderDetails.relationships?.['order-items']?.data,
       order_items_data: orderDetails.relationships?.['order-items']?.data,
     });
-    
+
     console.log('[LS Webhook] Loaded order details', {
       order_id: order.id,
       email: orderDetails?.attributes?.user_email,
@@ -148,7 +151,9 @@ async function handleOrderCreated(
     // Lemon Squeezy includes license keys in the order items when license key generation is enabled
     const orderItems = orderDetails.relationships?.['order-items']?.data;
     if (!orderItems || orderItems.length === 0) {
-      console.error('[LS Webhook] No order items found', { order_id: order.id });
+      console.error('[LS Webhook] No order items found', {
+        order_id: order.id,
+      });
       return;
     }
 
