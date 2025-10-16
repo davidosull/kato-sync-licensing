@@ -19,12 +19,22 @@ export default async function handler(
     // Get license from database
     const license = await getLicense(license_key);
 
+    console.log('[Customer Portal] License lookup', {
+      license_key_provided: !!license_key,
+      license_found: !!license,
+      has_subscription_id: !!license?.subscription_id,
+      subscription_id: license?.subscription_id,
+    });
+
     if (!license) {
       return res.status(404).json({ error: 'License not found' });
     }
 
     // If no subscription_id, return fallback to pricing page
     if (!license.subscription_id) {
+      console.log('[Customer Portal] No subscription_id for license', {
+        license_key: license_key.substring(0, 8) + '...',
+      });
       return res.status(200).json({
         has_portal: false,
         fallback_url: 'https://katosync.com/pricing',
@@ -70,6 +80,12 @@ export default async function handler(
 
     // Extract customer portal URL
     const portalUrl = subscription.attributes.urls?.customer_portal;
+
+    console.log('[Customer Portal] Portal URL extraction', {
+      has_urls: !!subscription.attributes.urls,
+      portal_url: portalUrl ? 'present' : 'missing',
+      subscription_status: subscription.attributes.status,
+    });
 
     if (!portalUrl) {
       return res.status(200).json({
