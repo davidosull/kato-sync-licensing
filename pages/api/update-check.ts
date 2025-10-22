@@ -39,8 +39,8 @@ export default async function handler(
 
     // For now, we'll hardcode the latest version and changelog
     // In production, you'd fetch this from S3 or a database
-    const latestVersion = '0.9.0';
-    const changelog = 'Pre-production release - Core functionality ready';
+    const latestVersion = '0.9.2';
+    const changelog = 'Version 0.9.2 - License activation improvements and better error handling';
 
     // Compare versions (simple string comparison for now)
     const currentVersion = version;
