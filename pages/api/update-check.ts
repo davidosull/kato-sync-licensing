@@ -16,10 +16,9 @@ export default async function handler(
   try {
     const { version, license_key } = req.query;
 
-    if (!license_key || typeof license_key !== 'string') {
-      return res.status(400).json({
-        update_available: false,
-      });
+    // License key is optional - updates should be visible to all
+    if (!license_key) {
+      // No license key provided, but we still want to show updates
     }
 
     if (!version || typeof version !== 'string') {
