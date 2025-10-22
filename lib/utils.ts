@@ -113,27 +113,44 @@ const s3Client = new S3Client({
   },
 });
 
-export async function getLatestVersionFromS3(bucketName: string): Promise<{ version: string; changelog: string }> {
+export async function getLatestVersionFromS3(
+  bucketName: string
+): Promise<{ version: string; changelog: string }> {
   try {
-    // Get metadata from the latest.zip file
-    const headCommand = new HeadObjectCommand({
+    // List all versioned plugin zips and pick the highest semver
+    const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+    const listCmd = new ListObjectsV2Command({
       Bucket: bucketName,
-      Key: 'kato-sync-latest.zip',
+      Prefix: 'kato-sync-',
     });
-    
-    const response = await s3Client.send(headCommand);
-    
-    // Extract version from metadata or filename
-    const version = response.Metadata?.version || '0.9.2';
-    const changelog = response.Metadata?.changelog || `Version ${version} - Bug fixes and improvements`;
-    
+
+    const listed = await s3Client.send(listCmd);
+    const keys = (listed.Contents || [])
+      .map((o) => o.Key || '')
+      .filter((k) => /^kato-sync-\d+\.\d+\.\d+\.zip$/.test(k));
+
+    const parse = (k: string) =>
+      k.match(/kato-sync-(\d+\.\d+\.\d+)\.zip/)?.[1] || '';
+    const compare = (a: string, b: string) => {
+      const pa = a.split('.').map((n) => parseInt(n, 10));
+      const pb = b.split('.').map((n) => parseInt(n, 10));
+      for (let i = 0; i < 3; i++) {
+        if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+      }
+      return 0;
+    };
+
+    const versions = keys.map(parse).filter(Boolean);
+    const latest = versions.sort(compare).pop();
+
+    const version = latest || '0.9.2';
+    const changelog = `Version ${version} - Bug fixes and improvements`;
     return { version, changelog };
   } catch (error) {
     console.error('Error fetching version from S3:', error);
-    // Fallback to hardcoded version
-    return { 
-      version: '0.9.2', 
-      changelog: 'Version 0.9.2 - License activation improvements and better error handling' 
+    return {
+      version: '0.9.2',
+      changelog: 'Version 0.9.2 - Bug fixes and improvements',
     };
   }
 }
@@ -148,7 +165,7 @@ export async function generateSignedUrl(
       Bucket: bucketName,
       Key: key,
     });
-    
+
     return await getSignedUrl(s3Client, command, { expiresIn });
   } catch (error) {
     console.error('Error generating signed URL:', error);
