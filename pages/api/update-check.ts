@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { UpdateCheckRequest, UpdateCheckResponse } from '@/types';
 import { getLicense } from '@/lib/supabase';
-import { generateSignedUrl } from '@/lib/utils';
+import { generateSignedUrl, getLatestVersionFromS3 } from '@/lib/utils';
 
 export default async function handler(
   req: NextApiRequest,
@@ -28,19 +28,15 @@ export default async function handler(
       });
     }
 
-    // Verify license exists (can be expired, just needs to exist)
-    const license = await getLicense(license_key);
-
-    if (!license) {
-      return res.status(403).json({
-        update_available: false,
-      });
+    // Check if license exists (optional - updates should be visible to all)
+    let license = null;
+    if (license_key) {
+      license = await getLicense(license_key);
     }
 
-    // For now, we'll hardcode the latest version and changelog
-    // In production, you'd fetch this from S3 or a database
-    const latestVersion = '0.9.2';
-    const changelog = 'Version 0.9.2 - License activation improvements and better error handling';
+    // Get latest version and changelog from S3 metadata
+    const bucketName = process.env.AWS_S3_BUCKET!;
+    const { version: latestVersion, changelog } = await getLatestVersionFromS3(bucketName);
 
     // Compare versions (simple string comparison for now)
     const currentVersion = version;
@@ -52,9 +48,11 @@ export default async function handler(
       });
     }
 
-    // Generate signed download URL
-    const bucketName = process.env.AWS_S3_BUCKET!;
-    const downloadUrl = generateSignedUrl(bucketName, 'kato-sync-latest.zip');
+    // Generate signed download URL (only if license is valid)
+    let downloadUrl = '';
+    if (license && license.status === 'active') {
+      downloadUrl = await generateSignedUrl(bucketName, 'kato-sync-latest.zip');
+    }
 
     return res.status(200).json({
       update_available: true,

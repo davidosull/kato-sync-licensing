@@ -1,5 +1,8 @@
 import crypto from 'crypto';
 import { LemonSqueezyWebhook } from '@/types';
+import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 export function verifyWebhookSignature(
   payload: string,
@@ -102,13 +105,55 @@ export function getLicenseStatus(
   return 'active';
 }
 
-export function generateSignedUrl(
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'eu-north-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
+});
+
+export async function getLatestVersionFromS3(bucketName: string): Promise<{ version: string; changelog: string }> {
+  try {
+    // Get metadata from the latest.zip file
+    const headCommand = new HeadObjectCommand({
+      Bucket: bucketName,
+      Key: 'kato-sync-latest.zip',
+    });
+    
+    const response = await s3Client.send(headCommand);
+    
+    // Extract version from metadata or filename
+    const version = response.Metadata?.version || '0.9.2';
+    const changelog = response.Metadata?.changelog || `Version ${version} - Bug fixes and improvements`;
+    
+    return { version, changelog };
+  } catch (error) {
+    console.error('Error fetching version from S3:', error);
+    // Fallback to hardcoded version
+    return { 
+      version: '0.9.2', 
+      changelog: 'Version 0.9.2 - License activation improvements and better error handling' 
+    };
+  }
+}
+
+export async function generateSignedUrl(
   bucketName: string,
   key: string,
   expiresIn: number = 900
-): string {
-  // This is a placeholder - in production, you'd use AWS SDK to generate signed URLs
-  // For now, return a direct URL (you'll need to implement proper S3 signed URL generation)
-  const region = process.env.AWS_REGION || 'eu-north-1';
-  return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+): Promise<string> {
+  try {
+    const command = new GetObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+    
+    return await getSignedUrl(s3Client, command, { expiresIn });
+  } catch (error) {
+    console.error('Error generating signed URL:', error);
+    // Fallback to direct URL
+    const region = process.env.AWS_REGION || 'eu-north-1';
+    return `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+  }
 }
