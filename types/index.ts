@@ -82,6 +82,8 @@ export interface UpdateCheckResponse {
   latest_version?: string;
   download_url?: string;
   changelog?: string;
+  changelog_url?: string;
+  upgrade_url?: string;
 }
 
 // Lemon Squeezy types

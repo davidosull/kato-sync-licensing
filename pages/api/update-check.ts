@@ -16,11 +16,6 @@ export default async function handler(
   try {
     const { version, license_key } = req.query;
 
-    // License key is optional - updates should be visible to all
-    if (!license_key) {
-      // No license key provided, but we still want to show updates
-    }
-
     if (!version || typeof version !== 'string') {
       return res.status(400).json({
         update_available: false,
@@ -28,9 +23,9 @@ export default async function handler(
     }
 
     // Check if license exists (optional - updates should be visible to all)
-    let license = null;
+    let license = null as null | any;
     if (license_key) {
-      license = await getLicense(license_key);
+      license = await getLicense(license_key as string);
     }
 
     // Get latest version and changelog from S3 metadata
@@ -47,10 +42,14 @@ export default async function handler(
       });
     }
 
-    // Generate signed download URL (only if license is valid)
+    // Determine download URL and upgrade URL based on license status
     let downloadUrl = '';
-    if (license && license.status === 'active') {
+    let upgradeUrl = '';
+    const canDownload = !!license && (license.status === 'active' || license.status === 'grace_period');
+    if (canDownload) {
       downloadUrl = await generateSignedUrl(bucketName, 'kato-sync-latest.zip');
+    } else {
+      upgradeUrl = 'https://katosync.com/pricing';
     }
 
     return res.status(200).json({
@@ -58,6 +57,8 @@ export default async function handler(
       latest_version: latestVersion,
       download_url: downloadUrl,
       changelog,
+      changelog_url: 'https://katosync.com/changelog',
+      upgrade_url: upgradeUrl,
     });
   } catch (error) {
     console.error('Update check error:', error);
