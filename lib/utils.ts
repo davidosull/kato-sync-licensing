@@ -191,7 +191,15 @@ export async function fetchChangelogFromMarketingSite(
     let formattedChangelog = '';
 
     relevantReleases.forEach((release: any) => {
-      formattedChangelog += `<h4>Version ${release.version} (${release.date})</h4>\n`;
+      // Format date from YYYY-MM-DD to "DD Month, YYYY"
+      const dateObj = new Date(release.date);
+      const formattedDate = dateObj.toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      });
+
+      formattedChangelog += `<h3>Version ${release.version}</h3>\n<p style="font-size: 12px; opacity: 0.8;">${release.title} - ${formattedDate}</p>\n`;
 
       if (release.changes) {
         Object.entries(release.changes).forEach(
