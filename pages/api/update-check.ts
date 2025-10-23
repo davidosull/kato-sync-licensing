@@ -5,6 +5,7 @@ import {
   generateSignedUrl,
   getLatestVersionFromS3,
   fetchChangelogFromMarketingSite,
+  isVersionLessThan,
 } from '@/lib/utils';
 
 export default async function handler(
@@ -36,9 +37,9 @@ export default async function handler(
     const bucketName = process.env.AWS_S3_BUCKET!;
     const { version: latestVersion } = await getLatestVersionFromS3(bucketName);
 
-    // Compare versions (simple string comparison for now)
+    // Compare versions using semantic version comparison
     const currentVersion = version;
-    const updateAvailable = currentVersion !== latestVersion;
+    const updateAvailable = isVersionLessThan(currentVersion, latestVersion);
 
     if (!updateAvailable) {
       return res.status(200).json({

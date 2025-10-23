@@ -179,8 +179,8 @@ export async function fetchChangelogFromMarketingSite(
 
     // Find releases between current and latest version
     const relevantReleases = changelogReleases.filter((release: any) => {
-      // Simple version comparison - in Phase 3 we'll improve this
-      return release.version !== currentVersion;
+      // Use semantic version comparison to find releases newer than current version
+      return isVersionGreaterThan(release.version, currentVersion);
     });
 
     if (relevantReleases.length === 0) {
@@ -225,6 +225,45 @@ export async function fetchChangelogFromMarketingSite(
     // Fallback to generic changelog
     return `Version ${latestVersion} - Bug fixes and improvements`;
   }
+}
+
+/**
+ * Compare semantic versions
+ * Returns: -1 if v1 < v2, 0 if v1 === v2, 1 if v1 > v2
+ */
+export function compareVersions(v1: string, v2: string): number {
+  // Remove any non-numeric characters except dots and dashes
+  const cleanVersion = (v: string) => v.replace(/[^0-9.-]/g, '');
+  
+  const version1 = cleanVersion(v1).split('.').map(Number);
+  const version2 = cleanVersion(v2).split('.').map(Number);
+  
+  // Pad arrays to same length
+  const maxLength = Math.max(version1.length, version2.length);
+  while (version1.length < maxLength) version1.push(0);
+  while (version2.length < maxLength) version2.push(0);
+  
+  // Compare each segment
+  for (let i = 0; i < maxLength; i++) {
+    if (version1[i] < version2[i]) return -1;
+    if (version1[i] > version2[i]) return 1;
+  }
+  
+  return 0;
+}
+
+/**
+ * Check if version1 is less than version2
+ */
+export function isVersionLessThan(v1: string, v2: string): boolean {
+  return compareVersions(v1, v2) < 0;
+}
+
+/**
+ * Check if version1 is greater than version2
+ */
+export function isVersionGreaterThan(v1: string, v2: string): boolean {
+  return compareVersions(v1, v2) > 0;
 }
 
 export async function generateSignedUrl(
