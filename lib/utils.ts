@@ -177,11 +177,8 @@ export async function fetchChangelogFromMarketingSite(
 
     const changelogReleases = await response.json();
 
-    // Find releases between current and latest version
-    const relevantReleases = changelogReleases.filter((release: any) => {
-      // Use semantic version comparison to find releases newer than current version
-      return isVersionGreaterThan(release.version, currentVersion);
-    });
+    // Show all changelog releases (complete history)
+    const relevantReleases = changelogReleases;
 
     if (relevantReleases.length === 0) {
       return `Version ${latestVersion} - Bug fixes and improvements`;
