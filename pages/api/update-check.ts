@@ -1,7 +1,11 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { UpdateCheckRequest, UpdateCheckResponse } from '@/types';
 import { getLicense } from '@/lib/supabase';
-import { generateSignedUrl, getLatestVersionFromS3 } from '@/lib/utils';
+import {
+  generateSignedUrl,
+  getLatestVersionFromS3,
+  fetchChangelogFromMarketingSite,
+} from '@/lib/utils';
 
 export default async function handler(
   req: NextApiRequest,
@@ -28,9 +32,9 @@ export default async function handler(
       license = await getLicense(license_key as string);
     }
 
-    // Get latest version and changelog from S3 metadata
+    // Get latest version from S3
     const bucketName = process.env.AWS_S3_BUCKET!;
-    const { version: latestVersion, changelog } = await getLatestVersionFromS3(bucketName);
+    const { version: latestVersion } = await getLatestVersionFromS3(bucketName);
 
     // Compare versions (simple string comparison for now)
     const currentVersion = version;
@@ -42,10 +46,18 @@ export default async function handler(
       });
     }
 
+    // Fetch changelog from marketing site
+    const changelog = await fetchChangelogFromMarketingSite(
+      currentVersion,
+      latestVersion
+    );
+
     // Determine download URL and upgrade URL based on license status
     let downloadUrl = '';
     let upgradeUrl = '';
-    const canDownload = !!license && (license.status === 'active' || license.status === 'grace_period');
+    const canDownload =
+      !!license &&
+      (license.status === 'active' || license.status === 'grace_period');
     if (canDownload) {
       downloadUrl = await generateSignedUrl(bucketName, 'kato-sync-latest.zip');
     } else {

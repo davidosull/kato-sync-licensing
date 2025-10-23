@@ -115,7 +115,7 @@ const s3Client = new S3Client({
 
 export async function getLatestVersionFromS3(
   bucketName: string
-): Promise<{ version: string; changelog: string }> {
+): Promise<{ version: string }> {
   try {
     // List all versioned plugin zips and pick the highest semver
     const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
@@ -144,14 +144,78 @@ export async function getLatestVersionFromS3(
     const latest = versions.sort(compare).pop();
 
     const version = latest || '0.9.2';
-    const changelog = `Version ${version} - Bug fixes and improvements`;
-    return { version, changelog };
+    return { version };
   } catch (error) {
     console.error('Error fetching version from S3:', error);
     return {
       version: '0.9.2',
-      changelog: 'Version 0.9.2 - Bug fixes and improvements',
     };
+  }
+}
+
+export async function fetchChangelogFromMarketingSite(
+  currentVersion: string,
+  latestVersion: string
+): Promise<string> {
+  try {
+    // Fetch changelog from marketing site
+    const response = await fetch(
+      'https://katosync.com/.netlify/functions/changelog',
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+        // Add timeout to prevent hanging
+        signal: AbortSignal.timeout(5000),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const changelogReleases = await response.json();
+
+    // Find releases between current and latest version
+    const relevantReleases = changelogReleases.filter((release: any) => {
+      // Simple version comparison - in Phase 3 we'll improve this
+      return release.version !== currentVersion;
+    });
+
+    if (relevantReleases.length === 0) {
+      return `Version ${latestVersion} - Bug fixes and improvements`;
+    }
+
+    // Format changelog for WordPress update modal
+    let formattedChangelog = '';
+
+    relevantReleases.forEach((release: any) => {
+      formattedChangelog += `<h4>Version ${release.version} (${release.date})</h4>\n`;
+
+      if (release.changes) {
+        Object.entries(release.changes).forEach(
+          ([category, items]: [string, any]) => {
+            formattedChangelog += `<p><strong>${category}</strong></p>\n<ul>\n`;
+            items.forEach((item: string) => {
+              formattedChangelog += `<li>${item}</li>\n`;
+            });
+            formattedChangelog += `</ul>\n`;
+          }
+        );
+      }
+
+      formattedChangelog += '\n';
+    });
+
+    return (
+      formattedChangelog.trim() ||
+      `Version ${latestVersion} - Bug fixes and improvements`
+    );
+  } catch (error) {
+    console.error('Error fetching changelog from marketing site:', error);
+    // Fallback to generic changelog
+    return `Version ${latestVersion} - Bug fixes and improvements`;
   }
 }
 
