@@ -231,21 +231,21 @@ export async function fetchChangelogFromMarketingSite(
 export function compareVersions(v1: string, v2: string): number {
   // Remove any non-numeric characters except dots and dashes
   const cleanVersion = (v: string) => v.replace(/[^0-9.-]/g, '');
-  
+
   const version1 = cleanVersion(v1).split('.').map(Number);
   const version2 = cleanVersion(v2).split('.').map(Number);
-  
+
   // Pad arrays to same length
   const maxLength = Math.max(version1.length, version2.length);
   while (version1.length < maxLength) version1.push(0);
   while (version2.length < maxLength) version2.push(0);
-  
+
   // Compare each segment
   for (let i = 0; i < maxLength; i++) {
     if (version1[i] < version2[i]) return -1;
     if (version1[i] > version2[i]) return 1;
   }
-  
+
   return 0;
 }
 

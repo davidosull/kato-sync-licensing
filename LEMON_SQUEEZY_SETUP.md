@@ -16,12 +16,12 @@ This guide covers the complete setup of Lemon Squeezy for KatoSync, including pr
 
 | Tier       | Billing | Variant ID | Price |
 | ---------- | ------- | ---------- | ----- |
-| Freelancer | Annual  | 1032742    | $90   |
-| Freelancer | Monthly | 1032736    | $9    |
-| Agency     | Annual  | 1032737    | $320  |
-| Agency     | Monthly | 1032738    | $32   |
-| Enterprise | Annual  | 1032739    | $450  |
-| Enterprise | Monthly | 1032740    | $45   |
+| Freelancer | Annual  | 1037927    | $90   |
+| Freelancer | Monthly | 1037928    | $9    |
+| Agency     | Annual  | 1037921    | $320  |
+| Agency     | Monthly | 1037922    | $32   |
+| Enterprise | Annual  | 1037924    | $450  |
+| Enterprise | Monthly | 1037925    | $45   |
 
 ## License Key Configuration
 
@@ -163,12 +163,12 @@ The marketing site fetches pricing from Lemon Squeezy API:
 
 Direct checkout URLs for each variant:
 
-- Freelancer Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032742`
-- Freelancer Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032736`
-- Agency Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032737`
-- Agency Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032738`
-- Enterprise Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032739`
-- Enterprise Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1032740`
+- Freelancer Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1037927`
+- Freelancer Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1037928`
+- Agency Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1037921`
+- Agency Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1037922`
+- Enterprise Annual: `https://davido-builds.lemonsqueezy.com/checkout/buy/1037924`
+- Enterprise Monthly: `https://davido-builds.lemonsqueezy.com/checkout/buy/1037925`
 
 ## Troubleshooting
 

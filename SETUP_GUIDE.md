@@ -138,7 +138,7 @@ npm install
 ### 4.4 Test License Management
 
 1. Activate the plugin
-2. Go to Kato Sync > License
+2. Go to KatoSync > License
 3. Test license activation with a test key
 
 ## Step 5: Marketing Site Setup
@@ -200,7 +200,7 @@ Update `netlify/functions/pricing.js`:
 ### 7.2 License Activation
 
 1. Install plugin on WordPress site
-2. Go to Kato Sync > License
+2. Go to KatoSync > License
 3. Enter license key from email
 4. Verify activation succeeds
 5. Check license appears in Supabase activations

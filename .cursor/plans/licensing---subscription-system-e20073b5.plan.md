@@ -1,4 +1,5 @@
 <!-- e20073b5-82a5-459c-8d9f-347f8ece3f5d adb853c0-2331-47dc-8ebd-74f9c49cb31f -->
+
 # KatoSync Licensing & Subscription System Implementation
 
 ## Overview
@@ -65,7 +66,7 @@ Mark activation as `is_local = true` (doesn't count toward tier limits)
 Create 3 products in Lemon Squeezy (or 6 variants under 1 product):
 
 - Freelancer Monthly ($9) + Annual ($90)
-- Agency Monthly ($32) + Annual ($320)  
+- Agency Monthly ($32) + Annual ($320)
 - Unlimited Monthly ($45) + Annual ($450)
 
 Enable license key generation on all products.
@@ -137,7 +138,7 @@ Create `includes/Licensing/Notices.php`:
 - Expired (day 8+): red notice "Your subscription has expired. New syncs are disabled. Renew to continue importing properties"
 - No license: info notice "Activate your license to start syncing properties"
 
-Display on all Kato Sync admin pages.
+Display on all KatoSync admin pages.
 
 ### 3.5 Plugin Updates System
 

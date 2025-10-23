@@ -90,13 +90,13 @@ export const VARIANT_TIER_MAP: Record<
   string,
   { tier: string; billing_cycle: string }
 > = {
-  // Actual Lemon Squeezy variant IDs for KatoSync product (ID: 657642)
-  '1032742': { tier: 'freelancer', billing_cycle: 'annual' },
-  '1032736': { tier: 'freelancer', billing_cycle: 'monthly' },
-  '1032737': { tier: 'agency', billing_cycle: 'annual' },
-  '1032738': { tier: 'agency', billing_cycle: 'monthly' },
-  '1032739': { tier: 'enterprise', billing_cycle: 'annual' },
-  '1032740': { tier: 'enterprise', billing_cycle: 'monthly' },
+  // Live Lemon Squeezy variant IDs for KatoSync product
+  '1037927': { tier: 'freelancer', billing_cycle: 'annual' },
+  '1037928': { tier: 'freelancer', billing_cycle: 'monthly' },
+  '1037921': { tier: 'agency', billing_cycle: 'annual' },
+  '1037922': { tier: 'agency', billing_cycle: 'monthly' },
+  '1037924': { tier: 'enterprise', billing_cycle: 'annual' },
+  '1037925': { tier: 'enterprise', billing_cycle: 'monthly' },
 };
 
 export function getTierFromVariantId(
